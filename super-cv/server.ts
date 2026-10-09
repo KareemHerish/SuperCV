@@ -1468,6 +1468,7 @@ async function startServer() {
       server: { middlewareMode: true },
       appType: 'spa',
     });
+    app.use(express.static(path.join(__dirname, 'public')));
     app.use(vite.middlewares);
   } else {
     app.use(express.static(path.join(__dirname, 'dist')));
