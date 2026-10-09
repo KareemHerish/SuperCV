@@ -31,10 +31,10 @@ function getAIClient() {
 const ai = getAIClient();
 
 const GEMINI_MODELS_CASCADE = [
+  'models/gemini-3.8-flash',
   'gemini-3.8-flash',
+  'models/gemini-3.8-flash-lite',
   'gemini-flash-latest',
-  'gemini-3.1-flash-lite',
-  'gemini-3-flash-preview',
 ];
 
 async function generateWithGeminiCascade(params: {
@@ -43,7 +43,7 @@ async function generateWithGeminiCascade(params: {
   timeoutMs?: number;
 }) {
   const activeAI = getAIClient();
-  const timeoutMs = params.timeoutMs || 12000;
+  const timeoutMs = params.timeoutMs || 8000;
 
   for (const model of GEMINI_MODELS_CASCADE) {
     try {
@@ -1039,6 +1039,7 @@ Summary: "${cvSummary || ''}"
               required: ['projects'],
             },
           },
+          timeoutMs: 5000,
         });
 
         const parsed = response && response.text ? JSON.parse(response.text.trim()) : {};
