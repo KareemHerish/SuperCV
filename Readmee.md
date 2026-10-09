@@ -4,7 +4,7 @@
 
 ## 👤 Participant
 
-| Field            | Development                          |
+| Field            | Value                          |
 | ---------------- | ------------------------------------ |
 | Full Name        | Karim Salah Abdelaziz Nasr           |
 | Project Name     | SuperCV                              |
