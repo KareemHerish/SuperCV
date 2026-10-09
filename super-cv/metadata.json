@@ -1,0 +1,6 @@
+{
+  "name": "سوبر CV | Super CV",
+  "description": "منصة ذكية متكاملة لبناء السيرة الذاتية واختبار المهارات ونظام RAG لتحليل الجاهزية لسوق العمل",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

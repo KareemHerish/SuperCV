@@ -1,0 +1,337 @@
+@import "tailwindcss";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+@layer base {
+  :root {
+    --bg-background: #f8f9fa;
+    --bg-surface-lowest: #ffffff;
+    --bg-surface-low: #f3f4f6;
+    --bg-surface: #e5e7eb;
+    --bg-surface-high: #d1d5db;
+    --bg-surface-highest: #e2e8f0;
+    --bg-surface-bright: #ffffff;
+
+    --color-primary: #0f172a;
+    --color-on-primary: #ffffff;
+    --color-on-surface: #0f172a;
+    --color-on-surface-variant: #475569;
+    --color-outline: #64748b;
+    --color-outline-variant: #cbd5e1;
+    --color-border: #e2e8f0;
+  }
+
+  .dark {
+    --bg-background: #131315;
+    --bg-surface-lowest: #0e0e10;
+    --bg-surface-low: #1b1b1d;
+    --bg-surface: #201f21;
+    --bg-surface-high: #2a2a2c;
+    --bg-surface-highest: #353437;
+    --bg-surface-bright: #39393b;
+
+    --color-primary: #ffffff;
+    --color-on-primary: #131315;
+    --color-on-surface: #e5e1e4;
+    --color-on-surface-variant: #c4c7c8;
+    --color-outline: #8e9192;
+    --color-outline-variant: #444748;
+    --color-border: #2a2a2c;
+  }
+
+  body {
+    background-color: var(--bg-background);
+    color: var(--color-on-surface);
+    font-family: 'IBM Plex Sans Arabic', 'IBM Plex Sans', system-ui, -apple-system, sans-serif;
+    min-height: 100vh;
+  }
+}
+
+/* ========================================================================= */
+/* SHADOW APPEARANCE SYSTEM & HARDWARE DEPTH STYLES                         */
+/* ========================================================================= */
+.shadow-appearance-hero {
+  box-shadow: 
+    0 0 0 1px rgba(255, 255, 255, 0.08),
+    0 20px 50px -15px rgba(0, 0, 0, 0.8),
+    0 40px 100px -20px rgba(0, 0, 0, 0.9),
+    0 0 60px -10px rgba(255, 255, 255, 0.05),
+    inset 0 1px 0 rgba(255, 255, 255, 0.12);
+}
+
+.light .shadow-appearance-hero {
+  box-shadow: 
+    0 0 0 1px rgba(0, 0, 0, 0.06),
+    0 20px 40px -15px rgba(15, 23, 42, 0.12),
+    0 35px 80px -20px rgba(15, 23, 42, 0.16),
+    inset 0 1px 0 rgba(255, 255, 255, 0.9);
+}
+
+.shadow-appearance-card {
+  box-shadow: 
+    0 0 0 1px rgba(52, 211, 153, 0.32),
+    0 0 24px -2px rgba(16, 185, 129, 0.28),
+    0 12px 35px -8px rgba(0, 0, 0, 0.7),
+    0 24px 50px -15px rgba(0, 0, 0, 0.85),
+    inset 0 1px 0 rgba(167, 243, 208, 0.22),
+    inset 0 0 16px rgba(16, 185, 129, 0.06);
+  transition: box-shadow 0.3s cubic-bezier(0.16, 1, 0.3, 1), transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.light .shadow-appearance-card {
+  box-shadow: 
+    0 0 0 1px rgba(16, 185, 129, 0.24),
+    0 4px 18px -2px rgba(16, 185, 129, 0.12),
+    0 12px 28px -6px rgba(15, 23, 42, 0.08),
+    0 22px 48px -12px rgba(15, 23, 42, 0.06),
+    inset 0 1px 0 rgba(255, 255, 255, 0.95),
+    inset 0 0 14px rgba(16, 185, 129, 0.04);
+}
+
+.shadow-appearance-card:hover {
+  box-shadow: 
+    0 0 0 1px rgba(52, 211, 153, 0.58),
+    0 0 34px 0px rgba(16, 185, 129, 0.45),
+    0 20px 50px -10px rgba(0, 0, 0, 0.88),
+    0 35px 80px -15px rgba(0, 0, 0, 0.9),
+    inset 0 1px 0 rgba(255, 255, 255, 0.35),
+    inset 0 0 20px rgba(16, 185, 129, 0.09);
+}
+
+.light .shadow-appearance-card:hover {
+  box-shadow: 
+    0 0 0 1px rgba(16, 185, 129, 0.44),
+    0 8px 24px -2px rgba(16, 185, 129, 0.22),
+    0 20px 42px -10px rgba(15, 23, 42, 0.12),
+    0 35px 70px -15px rgba(15, 23, 42, 0.1),
+    inset 0 1px 0 rgba(255, 255, 255, 1),
+    inset 0 0 16px rgba(16, 185, 129, 0.06);
+}
+
+.shadow-appearance-pill {
+  box-shadow: 
+    0 4px 14px -2px rgba(0, 0, 0, 0.4),
+    0 10px 25px -5px rgba(0, 0, 0, 0.3),
+    inset 0 1px 0 rgba(255, 255, 255, 0.1);
+}
+
+.light .shadow-appearance-pill {
+  box-shadow: 
+    0 4px 12px -2px rgba(15, 23, 42, 0.08),
+    0 8px 20px -4px rgba(15, 23, 42, 0.1),
+    inset 0 1px 0 rgba(255, 255, 255, 0.9);
+}
+
+.shadow-appearance-button {
+  box-shadow: 
+    0 10px 30px -6px rgba(0, 0, 0, 0.6),
+    0 0 25px -4px rgba(255, 255, 255, 0.12),
+    inset 0 1px 0 rgba(255, 255, 255, 0.2);
+}
+
+.light .shadow-appearance-button {
+  box-shadow: 
+    0 10px 25px -6px rgba(15, 23, 42, 0.2),
+    0 0 20px -4px rgba(15, 23, 42, 0.08),
+    inset 0 1px 0 rgba(255, 255, 255, 0.3);
+}
+
+/* Floating animation */
+@keyframes floatSlow {
+  0%, 100% {
+    transform: translateY(0px);
+  }
+  50% {
+    transform: translateY(-8px);
+  }
+}
+
+@keyframes floatSlowReverse {
+  0%, 100% {
+    transform: translateY(0px);
+  }
+  50% {
+    transform: translateY(8px);
+  }
+}
+
+.animate-float-slow {
+  animation: floatSlow 4s ease-in-out infinite;
+}
+
+.animate-float-reverse {
+  animation: floatSlowReverse 4.5s ease-in-out infinite;
+}
+
+/* Material Symbols configuration */
+.material-symbols-outlined {
+  font-family: 'Material Symbols Outlined';
+  font-weight: normal;
+  font-style: normal;
+  font-size: 20px;
+  line-height: 1;
+  letter-spacing: normal;
+  text-transform: none;
+  display: inline-block;
+  white-space: nowrap;
+  word-wrap: normal;
+  direction: ltr;
+  font-feature-settings: 'liga';
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Custom scrollbars */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(140, 140, 150, 0.25);
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(140, 140, 150, 0.45);
+}
+
+/* Print specific styles for A4 CV export */
+@page {
+  size: A4 portrait;
+  margin: 8mm 12mm;
+}
+
+@media print {
+  aside, header, nav, footer, .no-print, [data-no-print] {
+    display: none !important;
+  }
+  body, #root, main {
+    background: white !important;
+    color: #111827 !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    overflow: visible !important;
+    height: auto !important;
+  }
+  .resume-print-container, .sticky {
+    position: static !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    top: auto !important;
+    display: block !important;
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+  .print-page, #a4-resume-sheet, .a4-resume-page {
+    transform: none !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    min-height: auto !important;
+    margin: 0 auto !important;
+    padding: 0 !important;
+    box-shadow: none !important;
+    border: none !important;
+    background: white !important;
+    color: #111827 !important;
+    display: block !important;
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+  }
+  .a4-resume-page {
+    page-break-after: always !important;
+    break-after: page !important;
+  }
+  .a4-resume-page:last-child {
+    page-break-after: avoid !important;
+    break-after: avoid !important;
+  }
+}
+
+/* ========================================================================= */
+/* SKELETON SHIMMER LOADING ANIMATION                                        */
+/* ========================================================================= */
+@keyframes shimmerWave {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+.animate-shimmer-sweep {
+  position: relative;
+  overflow: hidden;
+}
+
+.animate-shimmer-sweep::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(255, 255, 255, 0.4) 50%,
+    transparent 100%
+  );
+  animation: shimmerWave 1.6s infinite ease-in-out;
+}
+
+.dark .animate-shimmer-sweep::after {
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(255, 255, 255, 0.07) 50%,
+    transparent 100%
+  );
+}
+
+/* ========================================================================= */
+/* CHAT VISIBLE SCROLLBAR SYSTEM                                             */
+/* ========================================================================= */
+.chat-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: #10b981 #f1f5f9;
+}
+
+.dark .chat-scrollbar {
+  scrollbar-color: #059669 #1e293b;
+}
+
+.chat-scrollbar::-webkit-scrollbar {
+  width: 7px;
+  height: 7px;
+}
+
+.chat-scrollbar::-webkit-scrollbar-track {
+  background: #f1f5f9;
+  border-radius: 9999px;
+}
+
+.dark .chat-scrollbar::-webkit-scrollbar-track {
+  background: #1b1b1d;
+  border-radius: 9999px;
+}
+
+.chat-scrollbar::-webkit-scrollbar-thumb {
+  background: #10b981;
+  border-radius: 9999px;
+  border: 1px solid #f1f5f9;
+}
+
+.dark .chat-scrollbar::-webkit-scrollbar-thumb {
+  background: #059669;
+  border-radius: 9999px;
+  border: 1px solid #1b1b1d;
+}
+
+.chat-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: #047857;
+}
+
+.dark .chat-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: #10b981;
+}
+
