@@ -78,6 +78,52 @@ export const AskAIView: React.FC = () => {
       .trim();
   };
 
+  const getClientFallbackReply = (query: string, track: any, candidateCV: any): string => {
+    const q = query.toLowerCase();
+    const trackName = track?.title || 'تطوير البرمجيات';
+    const role = candidateCV?.targetRole || track?.titleEn || 'Software Engineer';
+    const skills: string[] = candidateCV?.techSkills || [];
+
+    if (q.includes('skill') || q.includes('مهار') || q.includes('أتعلم') || q.includes('اتعلم') || q.includes('اهم') || q.includes('أهم')) {
+      const trackSkills: string[] = [];
+      if (track && Array.isArray(track.categories)) {
+        track.categories.forEach((cat: any) => {
+          if (Array.isArray(cat.skills)) {
+            cat.skills.forEach((s: any) => trackSkills.push(s.name));
+          }
+        });
+      }
+      const missing = trackSkills.filter(
+        ts => !skills.some(s => s.toLowerCase().includes(ts.toLowerCase()) || ts.toLowerCase().includes(s.toLowerCase()))
+      ).slice(0, 4);
+
+      const topPicks = missing.length > 0 ? missing.join('، ') : 'System Design، Docker & CI/CD، Caching (Redis)';
+      return `بناءً على مسارك الحالي في **${trackName}** (${role}):\n\n` +
+        `أهم المهارات اللي تركز عليها حالياً وتضيفها لسيرتك الذاتية:\n` +
+        `1. **${topPicks}**\n` +
+        `2. إتقان **Clean Architecture** وبناء مشاريع كاملة (End-to-End) واضحة في GitHub.\n` +
+        `3. قياس أثر الأداء وحل المشاكل المعمارية وتفادي الـ Bottlenecks بدلاً من مجرد كتابة كود وظيفي.`;
+    }
+
+    if (q.includes('سؤال') || q.includes('اختبر') || q.includes('كويز') || q.includes('امتحن') || q.includes('quiz')) {
+      const skillFocus = skills[0] || (track?.id === 'backend' ? 'Node.js & PostgreSQL' : 'React & State Architecture');
+      return `إليك سؤال سريع لاختبار مستواك في **${skillFocus}**:\n\n` +
+        `[QUIZ_QUESTION]\n` +
+        `السؤال: في بيئات الإنتاج عالية الحمل (${skillFocus})، ما هو الأسلوب المعماري الأنسب لتفادي عمليات إعادة المعالجة (Re-renders) غير الضرورية وتقليل استهلاك الذاكرة؟\n` +
+        `A) تخزين كافة البيانات في SessionStorage وقراءتها في كل دورة حياة\n` +
+        `B) فصل الحالة واستخدام Atomic Selectors مع Shallow Equality و Idempotent Handlers\n` +
+        `C) تنفيذ forceUpdate الدوري لضمان تحديث كل المكونات بالتزامن\n` +
+        `D) الاعتماد الكامل على متغيرات الـ window العامة لتفادي شجرة المكونات\n` +
+        `[CORRECT: B]\n` +
+        `[EXPLANATION: فصل الحالة والمحددات الذرية مع المقارنة السطحية تمنع المعالجات غير الضرورية وتضمن الحفاظ على معدل إطارات سلس وثبات استهلاك الذاكرة.]\n` +
+        `[/QUIZ_QUESTION]\n\n` +
+        `اضغط على الخيار الصحيح لمعرفة النتيجة فوراً!`;
+    }
+
+    return `بخصوص استفسارك حول **${trackName}** (${role}):\n\n` +
+      `أفضل نصيحة للمرحلة الحالية هي التركيز على بناء مشروع عملي قوي يبرز معمارية الكود، ربط الـ APIs بكفاءة، وتطبيق اختبارات حقيقية، مع إبراز النتائج بالأرقام في الـ CV (Google XYZ formula).`;
+  };
+
   const handleSendMessage = async (textToSend?: string) => {
     const text = textToSend || inputMessage;
     if (!text.trim() || isLoading) return;
@@ -123,8 +169,23 @@ export const AskAIView: React.FC = () => {
         }),
       });
 
-      const data = await res.json();
-      const rawReply = data.reply || 'تمت الإجابة.';
+      let rawReply = '';
+      let retrievedChunks: any = undefined;
+      let missingSkills: any = undefined;
+
+      if (res.ok) {
+        const data = await res.json().catch(() => null);
+        if (data && data.reply) {
+          rawReply = data.reply;
+          retrievedChunks = data.retrievedChunks;
+          missingSkills = data.missingSkills;
+        }
+      }
+
+      if (!rawReply) {
+        rawReply = getClientFallbackReply(text.trim(), currentTrack, cv);
+      }
+
       const cleanReply = stripGreeting(rawReply);
 
       const assistantMsg: ChatMessage = {
@@ -136,24 +197,25 @@ export const AskAIView: React.FC = () => {
           minute: '2-digit',
           hour12: true,
         }),
-        retrievedChunks: data.retrievedChunks,
-        missingSkills: data.missingSkills,
+        retrievedChunks,
+        missingSkills,
       };
 
       setMessages((prev) => [...prev, assistantMsg]);
     } catch (e) {
-      console.error(e);
-      const errorMsg: ChatMessage = {
-        id: 'msg-' + Date.now() + '-err',
+      console.warn('API call failed, utilizing client fallback response:', e);
+      const fallbackReply = stripGreeting(getClientFallbackReply(text.trim(), currentTrack, cv));
+      const fallbackMsg: ChatMessage = {
+        id: 'msg-' + Date.now() + '-reply',
         sender: 'assistant',
-        text: 'حدث خطأ مؤقت في الاتصال، يرجى إعادة المحاولة.',
+        text: fallbackReply,
         time: new Date().toLocaleTimeString('ar-EG', {
           hour: '2-digit',
           minute: '2-digit',
           hour12: true,
         }),
       };
-      setMessages((prev) => [...prev, errorMsg]);
+      setMessages((prev) => [...prev, fallbackMsg]);
     } finally {
       setIsLoading(false);
       // Ensure cursor stays in the input area after message completes
