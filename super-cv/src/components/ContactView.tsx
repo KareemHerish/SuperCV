@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import { useCV } from '../context/CVContext';
 import { SuperCVLogo } from './SuperCVLogo';
+import { db } from '../lib/firebase';
+import { collection, addDoc } from 'firebase/firestore';
 
 export const ContactView: React.FC = () => {
   const { cv } = useCV();
@@ -27,13 +29,57 @@ export const ContactView: React.FC = () => {
     };
 
     try {
-      // 1. Dispatch through server endpoint
-      await fetch('/api/contact/send', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      }).catch(err => console.warn('Server contact dispatch notice:', err));
+      // 1. Guaranteed database logging in Firestore
+      try {
+        await addDoc(collection(db, 'contact_messages'), {
+          name: payload.name,
+          email: payload.email,
+          message: payload.message,
+          recipient: TARGET_EMAIL,
+          createdAt: new Date().toISOString(),
+          timestamp: Date.now(),
+        });
+      } catch (dbErr) {
+        console.warn('Firestore contact backup note:', dbErr);
+      }
 
+      // 2. Dispatch through server endpoint (with SMTP / FormSubmit backend)
+      let serverDispatched = false;
+      try {
+        const res = await fetch('/api/contact/send', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+        if (res.ok) {
+          serverDispatched = true;
+        }
+      } catch (serverErr) {
+        console.warn('Server contact dispatch notice:', serverErr);
+      }
+
+      // 3. Client-side FormSubmit fallback if server route didn't acknowledge
+      if (!serverDispatched) {
+        try {
+          await fetch(`https://formsubmit.co/ajax/${TARGET_EMAIL}`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Accept': 'application/json',
+            },
+            body: JSON.stringify({
+              name: payload.name,
+              email: payload.email,
+              message: payload.message,
+              _subject: `استفسار جديد من منصة SuperCV - ${payload.name}`,
+              _template: 'table',
+              _captcha: 'false',
+            }),
+          });
+        } catch (clientErr) {
+          console.warn('Client direct dispatch notice:', clientErr);
+        }
+      }
 
       setSentDetails(payload);
       setSubmitted(true);
@@ -47,6 +93,13 @@ export const ContactView: React.FC = () => {
     }
   };
 
+  const mailSubject = encodeURIComponent(`استفسار بخصوص منصة SuperCV - ${sentDetails?.name || 'مستخدم'}`);
+  const mailBody = encodeURIComponent(
+    `مرحباً كريم،\n\nأرسل لك هذه الرسالة بخصوص منصة SuperCV:\n\n${sentDetails?.message || ''}\n\nبيانات التواصل:\nالاسم: ${sentDetails?.name || ''}\nالبريد: ${sentDetails?.email || ''}`
+  );
+  const gmailWebComposeUrl = `https://mail.google.com/mail/?view=cm&fs=1&to=${TARGET_EMAIL}&su=${mailSubject}&body=${mailBody}`;
+  const mailtoUrl = `mailto:${TARGET_EMAIL}?subject=${mailSubject}&body=${mailBody}`;
+
   return (
     <div className="flex flex-col w-full px-6 lg:px-10 py-6 max-w-[1440px] mx-auto gap-6 select-none" dir="rtl">
       
@@ -57,7 +110,7 @@ export const ContactView: React.FC = () => {
           <h1 className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white">تواصل معانا</h1>
         </div>
         <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 mt-1">
-          كلمنا فى أي وقت ورساتلك هتوصل الي المطور مباشرة
+          كلمنا فى أي وقت ورسالتك هتوصل إلى المطور مباشرة
         </p>
       </div>
 
@@ -73,7 +126,7 @@ export const ContactView: React.FC = () => {
               <div>
                 <h2 className="text-lg font-bold text-slate-900 dark:text-white">تم إرسال رسالتك بنجاح!</h2>
                 <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 max-w-md">
-                  تم توجيه الاستفسار مباشرة إلى البريد الإلكتروني للمطور:
+                  تم توجيه الاستفسار وحفظه للمطور مباشرة على البريد:
                 </p>
                 <div className="mt-2 inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 text-xs font-mono font-bold border border-emerald-200 dark:border-emerald-800" dir="ltr">
                   <span className="material-symbols-outlined text-[14px]">mail</span>
@@ -102,14 +155,25 @@ export const ContactView: React.FC = () => {
                 </div>
               )}
 
+              {/* Action Buttons: Direct Gmail confirmation + Send another */}
+              <div className="flex flex-col sm:flex-row items-center justify-center gap-3 mt-2 w-full max-w-md">
+                <a
+                  href={gmailWebComposeUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="w-full sm:w-auto flex-1 px-4 py-2.5 rounded-xl bg-blue-50 dark:bg-blue-950/40 hover:bg-blue-100 dark:hover:bg-blue-900/60 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800 text-xs font-bold transition-colors flex items-center justify-center gap-2 cursor-pointer"
+                  title="فتح في Gmail لتأكيد الإرسال المباشر من بريدك"
+                >
+                  <span className="material-symbols-outlined text-[16px]">open_in_new</span>
+                  <span>تأكيد الإرسال في Gmail</span>
+                </a>
 
-              <div className="flex items-center justify-center gap-3 mt-1">
                 <button
                   onClick={() => setSubmitted(false)}
-                  className="px-6 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold cursor-pointer transition-colors flex items-center gap-2 shadow-xs"
+                  className="w-full sm:w-auto px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold cursor-pointer transition-colors flex items-center justify-center gap-2 shadow-xs"
                 >
                   <span className="material-symbols-outlined text-[16px]">send</span>
-                  إرسال استفسار آخر
+                  <span>إرسال استفسار آخر</span>
                 </button>
               </div>
             </div>
@@ -118,7 +182,7 @@ export const ContactView: React.FC = () => {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">
-                    الأسم
+                    الاسم
                   </label>
                   <input
                     type="text"
@@ -126,7 +190,7 @@ export const ContactView: React.FC = () => {
                     value={formData.name}
                     onChange={e => setFormData({ ...formData, name: e.target.value })}
                     className="w-full h-11 px-4 rounded-xl bg-[var(--bg-surface-low)] border border-[var(--color-border)] text-xs text-[var(--color-on-surface)] focus:outline-none focus:border-emerald-500"
-                    placeholder="مثال: أحمد ممدوح"
+                    placeholder="مثال: كريم عبد العزيز"
                   />
                 </div>
                 <div>
@@ -154,10 +218,9 @@ export const ContactView: React.FC = () => {
                   value={formData.message}
                   onChange={e => setFormData({ ...formData, message: e.target.value })}
                   className="w-full p-4 rounded-xl bg-[var(--bg-surface-low)] border border-[var(--color-border)] text-xs text-[var(--color-on-surface)] focus:outline-none focus:border-emerald-500"
-                  placeholder="اكتب استفسارك وسيقوم المطور فى الرد عليك بأسرع وقت"
+                  placeholder="اكتب استفسارك وسيقوم المطور بالرد عليك بأسرع وقت"
                 />
               </div>
-
 
               <button
                 type="submit"
@@ -193,11 +256,11 @@ export const ContactView: React.FC = () => {
             <div>
               <div className="text-[11px] text-slate-500">البريد الإلكتروني</div>
               <a
-                href="mailto:kareemherish@gmail.com"
+                href={mailtoUrl}
                 className="text-xs font-bold text-slate-900 dark:text-white hover:text-emerald-600 transition-colors block"
                 dir="ltr"
               >
-                kareemherish@gmail.com
+                {TARGET_EMAIL}
               </a>
             </div>
           </div>
