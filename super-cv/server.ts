@@ -18,14 +18,23 @@ const PORT = process.env.PORT || 3000;
 app.use(express.json({ limit: '25mb' }));
 app.use(express.urlencoded({ extended: true, limit: '25mb' }));
 
+
 // Initialize Google GenAI client
-const apiKey = process.env.GEMINI_API_KEY || '';
-const ai = apiKey ? new GoogleGenAI({ apiKey }) : new GoogleGenAI();
+function getAIClient() {
+  const key = process.env.GEMINI_API_KEY;
+  if (key && key.trim()) {
+    return new GoogleGenAI({ apiKey: key.trim() });
+  }
+  return new GoogleGenAI();
+}
+
+const ai = getAIClient();
 
 const GEMINI_MODELS_CASCADE = [
-  'gemini-3-flash-preview',
+  'gemini-3.8-flash',
   'gemini-flash-latest',
   'gemini-3.1-flash-lite',
+  'gemini-3-flash-preview',
 ];
 
 async function generateWithGeminiCascade(params: {
@@ -33,8 +42,8 @@ async function generateWithGeminiCascade(params: {
   config?: any;
   timeoutMs?: number;
 }) {
-  const activeAI = ai || (process.env.GEMINI_API_KEY ? new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY }) : new GoogleGenAI());
-  const timeoutMs = params.timeoutMs || 9000;
+  const activeAI = getAIClient();
+  const timeoutMs = params.timeoutMs || 12000;
 
   for (const model of GEMINI_MODELS_CASCADE) {
     try {
@@ -51,7 +60,7 @@ async function generateWithGeminiCascade(params: {
         return res;
       }
     } catch {
-      // Quietly try next model in cascade without polluting logs
+      // Quietly try next model in cascade
     }
   }
   return null;
