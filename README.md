@@ -8,7 +8,7 @@
 | ---------------- | ------------------------------------ |
 | Full Name        | Karim Salah Abdelaziz Nasr           |
 | Project Name     | SuperCV                              |
-| GitHub Username  | SuperCV                              |
+| GitHub Username  | KareemHerish                         |
 | Internship Batch | August–October 2026                  |
 | Training Program | Large Language Models (LLMs) Program |
 | Organization     | [**Edrak for Ai**](https://edrak4ai.com/en)                         |
