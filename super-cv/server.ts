@@ -198,307 +198,234 @@ function retrieveTopChunks(query: string, chunks: CVChunk[], topK = 4): CVChunk[
   return scored.slice(0, topK).map(s => s.chunk);
 }
 
-// 1. RAG Chat Endpoint
-app.post('/api/rag/chat', async (req: Request, res: Response) => {
-  try {
-    const { message, mode, cv, trackRoadmap, history } = req.body;
+// ============================================================================
+// 1. Careem Chat — General-purpose assistant + CV-aware RAG
+// ============================================================================
 
-    if (!message) {
-      return res.status(400).json({ error: 'Message is required' });
-    }
+// Models used for chat (override from .env: GEMINI_CHAT_MODELS="model-a,model-b")
+const CHAT_MODELS = (process.env.GEMINI_CHAT_MODELS || 'gemini-2.5-flash,gemini-2.5-flash-lite,gemini-flash-latest')
+  .split(',')
+  .map(s => s.trim())
+  .filter(Boolean);
 
-    const chunks = chunkCV(cv);
-    const retrieved = retrieveTopChunks(message, chunks, 5);
+// Does the user's message concern their own CV / skills / projects?
+const CV_INTENT_REGEX =
+  /(سيرت|سيره|cv|resume|ريزيوم|مهاراتي|مهاراتى|مشاريعي|مشروعي|خبرتي|خبراتي|ناقصني|ينقصني|ناقصنى|ملفي|my\s+(cv|resume|skills|projects?|experience|profile)|ats)/i;
 
-    // Track roadmap skills list for gap analysis
-    const trackSkills: string[] = [];
-    if (trackRoadmap && Array.isArray(trackRoadmap.categories)) {
-      trackRoadmap.categories.forEach((cat: any) => {
-        if (Array.isArray(cat.skills)) {
-          cat.skills.forEach((s: any) => trackSkills.push(s.name));
-        }
-      });
-    }
+function buildCareemSystemInstruction(opts: {
+  cv: any;
+  trackTitle?: string;
+  candidateRole: string;
+  missingSkills: string[];
+  retrieved: CVChunk[];
+}): string {
+  const { cv, trackTitle, candidateRole, missingSkills, retrieved } = opts;
+  const hasCV = !!(cv && (cv.fullName || cv.summary || cv.techSkills?.length || cv.experiences?.length || cv.projects?.length));
 
-    // Determine missing skills from track
-    const lowerCandidateSkills = (cv?.techSkills || []).map((s: string) => s.toLowerCase());
-    const missingSkills = trackSkills.filter(
-      ts => !lowerCandidateSkills.some((cs: string) => cs.includes(ts.toLowerCase()) || ts.toLowerCase().includes(cs))
-    ).slice(0, 5);
-
-    // Candidate profile context
-    const candidateRole = cv?.targetRole || cv?.title || trackRoadmap?.titleEn || 'Software Engineer';
-    const candidateSkills = (cv?.techSkills || []).slice(0, 8);
-
-    const retrievedContextText = retrieved && retrieved.length > 0
-      ? `\n\n=== RELEVANT CANDIDATE CV EXTRACTS (RAG CHUNKS) ===\n` + retrieved.map((r, i) => `[Chunk ${i + 1} - ${r.section}]: ${r.content}`).join('\n')
-      : '';
-
-    const systemInstruction = `
-أنت "كريم" (Careem) — المساعد الذكي الشامل وخبير التكنولوجيا والبرمجيات ومستشار التطوير المهني.
-
-مهمتك ورسالتك:
-أنت شات بوت ذكي، منطقي، عام وشامل 100%. تجيب على **كافة أنواع الأسئلة والاستفسارات** التي يطرحها المستخدم أياً كان مجالها (برمجة، أكواد وتصحيح أخطاء، سيرة ذاتية ومسار مهني، أسئلة عامة، حسابات، معلومات، نصوص، استفسارات تقنية أو عامة، دردشة وحوار طبيعي) بمنتهى الذكاء والمنطقية والدقة العالية وبدون أي تحجيم أو رفض.
-
-قواعد الأسلوب والرد (حاسمة وإلزامية):
-1. **الرد المباشر والمنطقي فوراً (No Repetitive Greetings or Filler):**
-   - ادخل في صلب الإجابة والحل فوراً كأي شات بوت ذكي ومحترف.
-   - **ممنوع نهائياً** تكرار الديباجات المعلبة المكررة مثل: ("أهلاً بك! بصفتي خبيرك البرمجي في Super CV..." أو "بصفتي مستشارك التقني..." أو "بخصوص استفسارك...").
-   - أجب على سؤال المستخدم مباشرة، وإذا كان كوداً اكتب الكود النظيف، وإذا كان خطأ وضحه وحله فوراً.
-   - إذا طلب المستخدم تعديلاً معيناً (مثل: "شيل ال div ده ومتحطش اي divs تانيه"): افهم طلبه وقدم له الحل البرمجي أو الخطوات فوراً دون تردد.
-
-2. **الاحتفاظ بالـ RAG وسياق السيرة الذاتية كاملاً (RAG & Candidate Context):**
-   - جزء الـ RAG وسياق المرشح أدناه نشط ومتاح لك بالكامل.
-   - إذا سأل المستخدم عن سيرته الذاتية أو مهاراته أو مشاريعه أو ما ينقصه في مساره المهني أو كيفية اجتياز المقابلات، اعتمد على مقتطفات الـ RAG وسياق المرشح لتقديم إجابة مخصصة ومبهرة ودقيقة 100%.
-   - إذا سأل سؤالاً عاماً أو تقنياً لا يخص سيرته الذاتية، أجب على سؤاله العام مباشرة دون إقحام السيرة الذاتية رغماً عنه.
-
-3. **سياق المرشح ومقتطفات الـ RAG المسترجعة:**
-- الاسم: ${cv?.fullName || 'المستخدم'}
+  const cvBlock = hasCV
+    ? `- الاسم: ${cv.fullName || 'غير محدد'}
 - المسمى المستهدف: ${candidateRole}
-- المسار الحالي: ${trackRoadmap?.title || 'هندسة البرمجيات'}
-- المهارات التقنية المسجلة: ${(cv?.techSkills || []).join(', ') || 'لم تُحدد بعد'}
-- المهارات المقترحة للمسار: ${missingSkills.join(', ') || 'لا توجد فجوات رئيسية'}
-${retrievedContextText}
+- المسار المختار في المنصة: ${trackTitle || 'غير محدد'}
+- المهارات التقنية المسجلة: ${(cv.techSkills || []).join(', ') || 'لم تُحدد بعد'}
+- مهارات ناقصة مقارنة بمسار roadmap.sh (معلومة إضافية): ${missingSkills.join(', ') || 'لا يوجد'}
+${retrieved.length > 0
+  ? '\nمقتطفات مسترجعة من السيرة الذاتية (RAG) ذات صلة بسؤال المستخدم الحالي:\n' +
+    retrieved.map((r, i) => `[${i + 1}] ${r.section}: ${r.content}`).join('\n')
+  : ''}`
+    : `- المستخدم لم يكتب بيانات في الـ CV لسه.`;
 
-4. **الذاكرة قصيرة المدى واستمرارية السياق (Session Memory):**
-   - احفظ كل ما دار في الجلسة وتابع الأسئلة التتابعية ("طب ليه؟"، "اشرحلي أكتر"، "كمل"، "زي ما سألتك") وافهم مرجعها بدقة.
+  return `
+أنت "كريم" (Careem) — مساعد ذكي شامل داخل منصة SuperCV. أنت مساعد عام بقدرات كاملة زي ChatGPT وGemini، وفي نفس الوقت عندك تخصص إضافي في البرمجة والمسار المهني وكتابة الـ CV.
 
-5. **الكويز والأسئلة التفاعلية:**
-   - عند طلب كويز أو أسئلة اختبار، ضع كل سؤال داخل الصيغة:
+## نطاقك
+- بتجاوب على **أي سؤال** المستخدم يسأله، في أي مجال: برمجة وتصحيح أكواد، معلومات عامة، علوم، رياضيات وحسابات، لغات وترجمة، كتابة وصياغة، نصايح حياتية ودراسية، أفكار ومشاريع، شرح مفاهيم، دردشة عادية، وغيرها.
+- ما تقولش "ده خارج تخصصي" أو "أنا مخصص للـ CV بس" أبدًا. السؤال مش لازم يكون له علاقة بالـ CV أو بالمنصة.
+- ما ترفضش غير الطلبات الضارة بشكل واضح (أذى فعلي، نشاط غير قانوني خطير). غير كده جاوب بجدية.
+- لو السؤال عن حاجة محتاجة معلومات لحظية (أخبار النهارده، أسعار حالية، نتايج مباريات) وانت مالكش اتصال بالإنترنت، وضّح ده بصراحة بدل ما تألف إجابة.
+- لو مش متأكد من معلومة قول كده بوضوح، ومتخترعش حقايق أو مصادر أو أرقام.
+
+## الأسلوب
+- رد بنفس لغة ولهجة المستخدم (عامية مصرية، فصحى، أو إنجليزي).
+- ادخل في الإجابة على طول من غير مقدمات محفوظة زي "بصفتي مستشارك التقني..." أو "بخصوص استفسارك...". لو المستخدم سلّم عليك أو دردش، رد بشكل طبيعي وودود.
+- خلي طول الإجابة على قد السؤال: السؤال البسيط يتجاوب باختصار، والسؤال العميق يتجاوب بتفصيل.
+- استخدم Markdown بشكل معتدل: عناوين وقوائم لما تفيد، ولا تبالغ.
+- الأكواد دايمًا داخل code blocks مع تحديد اللغة، والكود يكون سليم وجاهز للتشغيل. لو المستخدم طلب تعديل معين (مثلاً "شيل الـ div ده ومتحطش divs تانية") نفّذه بالظبط واديله الكود المعدّل.
+- كمّل المحادثة بشكل طبيعي: افهم الأسئلة التتابعية ("طب ليه؟"، "كمّل"، "اشرحلي أكتر") من سياق الرسايل السابقة.
+
+## استخدام بيانات الـ CV (RAG)
+- بيانات المستخدم وسيرته الذاتية متاحة لك تحت. استخدمها **بس** لما يكون السؤال عن سيرته، مهاراته، مشاريعه، خبرته، مساره المهني، المقابلات، أو لما التخصيص بيفيد فعلاً.
+- لو السؤال عام أو ملوش علاقة بالـ CV، جاوب عليه عادي ومتقحمش بيانات الـ CV فيه.
+- ما تألفش أي معلومة عن الـ CV مش موجودة في البيانات. لو المستخدم سأل عن حاجة مش مكتوبة في الـ CV قوله إنها مش موجودة واقترح يضيفها.
+- ما تذكرش كلمات زي "الـ chunks" أو "RAG" في ردك؛ اتكلم بشكل طبيعي ("في الـ CV بتاعك...").
+- لو سأل عن راتب أو سوق العمل، اديله تقديرات واقعية واذكر إنها تقريبية وتختلف حسب البلد والخبرة.
+- لما تعيد صياغة إنجاز في الـ CV استخدم صيغة Google XYZ ("حققت [X] مقاسة بـ [Y] عن طريق [Z]")، ولا تخترع أرقام ما ذكرهاش المستخدم — استخدم placeholders زي [X%] لو الرقم مش معروف.
+
+## بيانات المستخدم (للاستخدام عند الحاجة فقط)
+${cvBlock}
+
+## صيغة الكويز
+لما المستخدم يطلب كويز أو أسئلة اختبار، اكتب كل سؤال بالصيغة دي بالظبط (سؤال واحد داخل كل بلوك، والإجابة الصحيحة حرف واحد A/B/C/D):
 [QUIZ_QUESTION]
 السؤال: [نص السؤال]
 A) [الخيار 1]
 B) [الخيار 2]
 C) [الخيار 3]
 D) [الخيار 4]
-[CORRECT: الخيار الصحيح]
-[EXPLANATION: الشرح العلمي الدقيق]
+[CORRECT: الحرف الصحيح]
+[EXPLANATION: شرح مختصر ودقيق]
 [/QUIZ_QUESTION]
+`.trim();
+}
 
-6. **تعدد اللغات واللهجات:**
-   - تفهم العامية المصرية، الفصحى، والإنجليزية، ورد بنفس لغة وأسلوب السؤال باحترافية وسلاسة.
-`;
+// Build a valid, strictly alternating Gemini "contents" array
+function buildChatContents(history: any, message: string) {
+  const contents: { role: 'user' | 'model'; parts: { text: string }[] }[] = [];
 
-    let replyText = '';
-
-    // Build canonical multi-turn messages array
-    const contents: any[] = [];
-    if (Array.isArray(history)) {
-      for (const h of history) {
-        if (!h || !h.text || typeof h.text !== 'string' || !h.text.trim()) continue;
-        const role = (h.role === 'model' || h.role === 'assistant') ? 'model' : 'user';
-        // In Gemini, contents array must start with 'user'
-        if (contents.length === 0 && role === 'model') continue;
-
-        const last = contents[contents.length - 1];
-        if (last && last.role === role) {
-          last.parts[0].text += '\n\n' + h.text.trim();
-        } else {
-          contents.push({ role, parts: [{ text: h.text.trim() }] });
-        }
+  if (Array.isArray(history)) {
+    for (const h of history) {
+      if (!h || typeof h.text !== 'string' || !h.text.trim()) continue;
+      const role: 'user' | 'model' = h.role === 'model' || h.role === 'assistant' ? 'model' : 'user';
+      if (contents.length === 0 && role === 'model') continue; // must start with user
+      const text = h.text.trim().slice(0, 6000);
+      const last = contents[contents.length - 1];
+      if (last && last.role === role) {
+        last.parts[0].text += '\n\n' + text;
+      } else {
+        contents.push({ role, parts: [{ text }] });
       }
     }
+  }
 
-    // Ensure strict turn alternation before appending current user message
-    if (contents.length > 0 && contents[contents.length - 1].role === 'user') {
-      contents.push({ role: 'model', parts: [{ text: 'حسناً، فهمت ذلك.' }] });
+  const current = message.trim();
+  const last = contents[contents.length - 1];
+  if (last && last.role === 'user') {
+    // previous question never got an answer — merge instead of inventing a fake model turn
+    last.parts[0].text += '\n\n' + current;
+  } else {
+    contents.push({ role: 'user', parts: [{ text: current }] });
+  }
+  return contents;
+}
+
+async function generateChatWithGemini(contents: any[], systemInstruction: string): Promise<{ text: string; model: string } | null> {
+  const activeAI = getAIClient();
+
+  for (const model of CHAT_MODELS) {
+    let timer: NodeJS.Timeout | undefined;
+    try {
+      const callPromise = activeAI.models.generateContent({
+        model,
+        contents,
+        config: {
+          systemInstruction,
+          temperature: 0.7,
+          // Gemini 2.5 "thinking" tokens count toward this limit, so keep it generous
+          maxOutputTokens: 8192,
+        },
+      });
+      const timeoutPromise = new Promise<never>((_, reject) => {
+        timer = setTimeout(() => reject(new Error(`Timeout (25s) on ${model}`)), 25000);
+      });
+      const res: any = await Promise.race([callPromise, timeoutPromise]);
+      const text = (res?.text || '').trim();
+      if (text) return { text, model };
+      console.warn(`[Careem] ${model} returned empty text. finishReason =`, res?.candidates?.[0]?.finishReason);
+    } catch (err: any) {
+      // Full message on purpose — this is how you find out a model name is wrong / quota is exhausted
+      console.warn(`[Careem] ${model} failed:`, err?.message || err);
+    } finally {
+      if (timer) clearTimeout(timer);
     }
-    contents.push({ role: 'user', parts: [{ text: message.trim() }] });
+  }
+  return null;
+}
 
-    // Active AI Generation with Model Cascade (temperature 0.2 for strict technical accuracy)
-    const geminiRes = await generateWithGeminiCascade({
-      contents,
-      config: {
-        systemInstruction,
-        temperature: 0.2,
-        maxOutputTokens: 2500,
-      },
-      timeoutMs: 14000,
+async function generateChatWithMistral(contents: any[], systemInstruction: string): Promise<string> {
+  if (!process.env.HUGGINGFACE_API_KEY) return '';
+  try {
+    const messages = [
+      { role: 'system' as const, content: systemInstruction },
+      ...contents.map(c => ({
+        role: (c.role === 'model' ? 'assistant' : 'user') as 'assistant' | 'user',
+        content: c.parts[0].text as string,
+      })),
+    ];
+    const out = await hf.chatCompletion({
+      model: MISTRAL_MODEL,
+      messages,
+      max_tokens: 1500,
+      temperature: 0.6,
+    });
+    return (out?.choices?.[0]?.message?.content || '').trim();
+  } catch (err: any) {
+    console.warn('[Careem] Mistral fallback failed:', err?.message || err);
+    return '';
+  }
+}
+
+app.post('/api/rag/chat', async (req: Request, res: Response) => {
+  try {
+    const { message, mode, cv, trackRoadmap, history } = req.body;
+
+    if (!message || typeof message !== 'string' || !message.trim()) {
+      return res.status(400).json({ error: 'Message is required' });
+    }
+
+    // ---- RAG: retrieve CV chunks only when the question is about the CV ----
+    const cvIntent = CV_INTENT_REGEX.test(message);
+    const chunks = chunkCV(cv);
+    const retrieved = cvIntent ? retrieveTopChunks(message, chunks, 5) : [];
+
+    // ---- Skill gap vs. selected roadmap track ----
+    const trackSkills: string[] = [];
+    if (trackRoadmap && Array.isArray(trackRoadmap.categories)) {
+      trackRoadmap.categories.forEach((cat: any) => {
+        if (Array.isArray(cat.skills)) cat.skills.forEach((s: any) => trackSkills.push(s.name));
+      });
+    }
+    const lowerCandidateSkills: string[] = (cv?.techSkills || []).map((s: string) => String(s).toLowerCase());
+    const missingSkills = trackSkills
+      .filter(ts => !lowerCandidateSkills.some(cs => cs.includes(ts.toLowerCase()) || ts.toLowerCase().includes(cs)))
+      .slice(0, 5);
+
+    const candidateRole = cv?.targetRole || cv?.title || trackRoadmap?.titleEn || 'Software Engineer';
+
+    const systemInstruction = buildCareemSystemInstruction({
+      cv,
+      trackTitle: trackRoadmap?.title,
+      candidateRole,
+      missingSkills,
+      retrieved,
     });
 
-    if (geminiRes && geminiRes.text && geminiRes.text.trim()) {
-      replyText = geminiRes.text.trim();
+    const contents = buildChatContents(history, message);
+
+    // ---- Generation: Gemini cascade → Mistral → honest error (no canned fake answers) ----
+    let replyText = '';
+    let usedModel = '';
+
+    const gem = await generateChatWithGemini(contents, systemInstruction);
+    if (gem) {
+      replyText = gem.text;
+      usedModel = gem.model;
+    } else {
+      replyText = await generateChatWithMistral(contents, systemInstruction);
+      if (replyText) usedModel = MISTRAL_MODEL;
     }
 
-    // Dynamic Bilingual Fallback if network drops or API is completely unavailable
     if (!replyText) {
-      const isEnglishQuery = /^[a-zA-Z0-9\s.,!?'"()-]+$/.test(message.trim()) ||
-        (message.match(/[a-zA-Z]/g) || []).length > (message.match(/[\u0600-\u06FF]/g) || []).length;
-      const targetRole = cv?.targetRole || trackRoadmap?.titleEn || 'Software Engineer';
-      const msgLower = (message || '').toLowerCase();
-
-      const isQuizOrTestQuery =
-        msgLower.includes('اختبر') ||
-        msgLower.includes('سؤال') ||
-        msgLower.includes('اسأل') ||
-        msgLower.includes('اسال') ||
-        msgLower.includes('كويز') ||
-        msgLower.includes('quiz') ||
-        msgLower.includes('امتحن') ||
-        msgLower.includes('mcq') ||
-        msgLower.includes('اختيار من متعدد');
-
-      if (isQuizOrTestQuery) {
-        // High-yield interactive multiple-choice question tailored to track
-        const skillFocus = candidateSkills[0] || (trackRoadmap?.id === 'backend' ? 'Node.js & PostgreSQL' : 'React & State Architecture');
-        replyText = `إليك سؤال تفاعلي لقياس مستواك في **${skillFocus}**:\n\n` +
-          `[QUIZ_QUESTION]\n` +
-          `السؤال: في بيئات الإنتاج عالية الحمل (${skillFocus})، ما هو الأسلوب المعماري الأنسب لتفادي عمليات إعادة المعالجة (Re-renders / Overheads) وتقليل استهلاك الذاكرة؟\n` +
-          `A) الاعتماد الكامل على متغيرات الـ window العامة لتفادي شجرة المكونات\n` +
-          `B) فصل الحالة واستخدام Atomic Selectors مع Shallow Equality و Idempotent Handlers\n` +
-          `C) تنفيذ forceUpdate الدوري لضمان تحديث كل المكونات بالتزامن\n` +
-          `D) تخزين كافة البيانات في SessionStorage وقراءتها في كل دورة حياة\n` +
-          `[CORRECT: B]\n` +
-          `[EXPLANATION: فصل الحالة (State Decoupling) والمحددات الذرية مع المقارنة السطحية تمنع المعالجات غير الضرورية وتضمن الحفاظ على معدل إطارات سلس وثبات استهلاك الذاكرة.]\n` +
-          `[/QUIZ_QUESTION]\n\n` +
-          `اضغط على الخيار الصحيح لمعرفة النتيجة فوراً!`;
-      } else if (isEnglishQuery) {
-        if (msgLower.includes('gap') || msgLower.includes('miss') || msgLower.includes('roadmap') || msgLower.includes('skill')) {
-          const gaps = missingSkills.length > 0 ? missingSkills : ['Distributed Systems Design', 'Event Streaming (Kafka)', 'Edge Caching & Cloudflare Workers'];
-          replyText = `Based on reviewing your profile for **${targetRole}** against the **${trackRoadmap?.titleEn || 'Engineering'}** roadmap:\n\n` +
-            `### 1. Key Skill Gaps & Focus Areas:\n` +
-            gaps.map((s, i) => `${i + 1}. **${s}**:\n   - **Market Demand**: Highly requested by top tech teams in the GCC and global remote companies.\n   - **Action Plan**: Build a targeted GitHub PoC illustrating scalability and error handling.`).join('\n\n') +
-            `\n\n### 2. Strategic Resume Tip:\nExplicitly list these competencies under your Technical Skills and demonstrate real production impact.`;
-        } else if (msgLower.includes('xyz') || msgLower.includes('star') || msgLower.includes('rewrite') || msgLower.includes('bullet') || msgLower.includes('achieve') || msgLower.includes('experience')) {
-          const exp = cv?.experiences?.[0];
-          const company = exp?.company || 'Tech Company';
-          replyText = `Here is a high-impact rewrite following the **Google XYZ Formula** (Accomplished [X] measured by [Y] by doing [Z]):\n\n` +
-            `> *"Engineered and migrated core user-facing systems at ${company} using ${(cv?.techSkills || ['React', 'TypeScript', 'Next.js']).slice(0, 3).join(', ')}, reducing end-to-end latency by 38% and saving $14,000/month in infrastructure costs while maintaining 99.98% uptime."*\n\n` +
-            `**Why this wins with engineering hiring managers:**\n` +
-            `1. **Executive Action Verb**: Direct architectural leadership.\n` +
-            `2. **Quantified Business & Technical ROI**: Direct latency reduction and financial savings.\n` +
-            `3. **Modern Tech Stack**: Reflects modern production standards.`;
-        } else if (msgLower.includes('salary') || msgLower.includes('offer') || msgLower.includes('compensation') || msgLower.includes('rate') || msgLower.includes('pay')) {
-          replyText = `### Current 2025/2026 Compensation Benchmarks for **${targetRole}**:\n\n` +
-            `- **Riyadh (KSA)**: **24,000 to 36,000 SAR/month** + housing, flights, and medical allowances.\n` +
-            `- **Dubai / Abu Dhabi (UAE)**: **26,000 to 38,000 AED/month** (tax-free compensation package).\n` +
-            `- **Remote Global**: **$5,500 to $8,500 USD/month**.\n\n` +
-            `### Negotiation Strategy:\n` +
-            `- Never give the first number; always ask for the approved salary range for the role.\n` +
-            `- Tie your ask directly to your track record in delivering high throughput and cost optimization in ${(cv?.techSkills || []).slice(0, 3).join(', ')}.`;
-        } else if (msgLower.includes('interview') || msgLower.includes('prep') || msgLower.includes('question')) {
-          replyText = `### Top Architectural Interview Scenarios for **${targetRole}**:\n\n` +
-            `1. **Scalability & High Concurrency:**\n   *How would you architect a platform handling 100k concurrent requests during flash sales?*\n   - Key points: Edge caching, CDN multi-region routing, read-replicas, and asynchronous job queues.\n\n` +
-            `2. **State Management & Web Performance:**\n   *How do you prevent unnecessary re-renders and memory leaks in production?*\n   - Key points: Component decoupling, shallow equality checks, aborting dangling network requests, and virtualized lists.\n\n` +
-            `3. **Fault Tolerance & Resilience:**\n   *What happens when a critical third-party dependency fails?*\n   - Key points: Circuit breaker pattern, graceful degradation, and offline fallback caching.`;
-        } else {
-          replyText = `Analyzing your profile for **${targetRole}**:\n\n` +
-            `1. **Profile Assessment**: You have a strong technical foundation covering ${(cv?.techSkills || []).slice(0, 5).join(', ') || 'modern engineering fundamentals'}.\n\n` +
-            `2. **Actionable Feedback on "${message}"**:\n` +
-            `Focus your responses on the architectural choices you've made, the trade-offs involved, and the quantifiable business outcomes. Tailoring your communication for senior engineering reviewers is the fastest way to stand out.`;
-        }
-      } else {
-        // Arabic dynamic analysis
-        const isProjectQuery =
-          msgLower.includes('مشروع') ||
-          msgLower.includes('project') ||
-          msgLower.includes('كيف أبدأ') ||
-          msgLower.includes('كيف ابدا') ||
-          msgLower.includes('how to build') ||
-          msgLower.includes('معمارية') ||
-          msgLower.includes('ازاي اعمل') ||
-          msgLower.includes('خطوات');
-
-        if (isProjectQuery) {
-          const quoteMatch = message.match(/["'«]([^"'»]+)["'»]/);
-          const projectTitle = quoteMatch ? quoteMatch[1] : (message.length > 50 ? message.slice(0, 45) + '...' : message);
-
-          replyText = `### خطة معمارية وتنفيذية لمشروع **${projectTitle}**:\n\n` +
-            `**1. المعمارية وحزمة التقنيات المقترحة (Tech Stack):**\n` +
-            `- **الواجهة الأمامية (Frontend):** React أو Next.js مع TypeScript و Tailwind CSS لتوفير تجربة مستخدم تفاعلية فائقة السرعة.\n` +
-            `- **الواجهة الخلفية (Backend):** Node.js / Express أو NestJS بتصميم Modular Architecture يفصل منطق الأعمال (Business Logic) عن مسارات الـ API.\n` +
-            `- **قواعد البيانات والتخزين:** PostgreSQL / Supabase لإدارة العلاقات والبيانات المنظمة، مع Redis للتخزين المؤقت.\n\n` +
-            `**2. خطوات البناء والتنفيذ العملية:**\n` +
-            `- **التأسيس:** بناء هيكل المجلدات، إعداد نظام المصادقة (Auth & Roles)، وتصميم جداول قاعدة البيانات.\n` +
-            `- **تطوير الوظائف الأساسية:** برمجة الـ Endpoints الرئيسية وربطها بالواجهات مع معالجة الأخطاء وحالات التحميل.\n` +
-            `- **الأمان والأداء:** تعقيم المدخلات، إضافة Rate Limiting، وتحسين الـ Caching لضمان سرعة الاستجابة.\n\n` +
-            `**3. كيف تبرز هذا المشروع في سيرتك الذاتية (CV Impact):**\n` +
-            `أبرز هذا المشروع في الـ CV مع التركيز على التحديات الهندسية التي واجهتك، مثل تحسين زمن استجابة الـ API وإدارة الـ State بكفاءة.`;
-        } else if (msgLower.includes('ناقص') || msgLower.includes('gap') || msgLower.includes('فجوة') || msgLower.includes('roadmap') || msgLower.includes('مهارات')) {
-          const gaps = missingSkills.length > 0 ? missingSkills : ['System Design & Scalability', 'Event-Driven Architecture (Kafka)', 'Edge Caching & Cloudflare Workers'];
-          replyText = `بناءً على تدقيق نسختك الموثقة من السيرة الذاتية لـ **${targetRole}** ومقارنتها بمعايير مسار **${trackRoadmap?.titleEn || 'Engineering'}** في roadmap.sh:\n\n` +
-            `### 1. تحليل الفجوات التقنية (Core Competency Gaps):\n` +
-            gaps.map((s, i) => `${i + 1}. **${s}**:\n   - **الأهمية في سوق العمل**: تطلبها كبرى شركات التقنية لضمان مرونة وتوسع الأنظمة تحت أحمال الذروة.\n   - **خطة التعزيز**: بناء مشروع عملي يبرز استخدامها في ملفك الهندسي.`).join('\n\n') +
-            `\n\n### 2. التوصية التنفيذية لسيرتك:\n` +
-            `أضف قسماً لـ **System Architecture** يبرز مهاراتك في ${(cv?.techSkills || []).slice(0, 3).join(', ') || 'التقنيات الأساسية'} مع ربطها بالأثر الرقمي المباشر.`;
-        } else if (msgLower.includes('xyz') || msgLower.includes('star') || msgLower.includes('صياغة') || msgLower.includes('إنجاز') || msgLower.includes('bullet') || msgLower.includes('خبرت')) {
-          const exp = cv?.experiences?.[0];
-          const company = exp?.company || 'الشركة التقنية';
-          replyText = `إليك إعادة صياغة احترافية لإنجازك وفق معيار **Google XYZ Formula** (Accomplished [X] measured by [Y] by doing [Z]):\n\n` +
-            `> *"قاد فريقاً هندسياً لإعادة بناء الواجهات والخدمات الأساسية في ${company} باستخدام ${(cv?.techSkills || ['Next.js 15', 'TypeScript']).slice(0, 2).join(' و ')}، مما أدى لتقليص زمن الاستجابة بنسبة 38% وتوفير ما يعادل 14,000$ شهرياً في نفقات الاستضافة السحابية مع تحقيق توافر 99.98%."*\n\n` +
-            `**لماذا تفوز هذه الصياغة أمام مدراء التوظيف؟**\n` +
-            `1. تبدأ بفعل قيادي تنفيذي واضح (*قاد فريقاً هندسياً*).\n` +
-            `2. تحتوي على مقاييس ربحية وتقنية ملموسة (38% تحسين أداء، 14k$ توفير شهري).\n` +
-            `3. تذكر الأدوات المعمارية الحديثة بالإنجليزية الدقيقة.`;
-        } else if (msgLower.includes('راتب') || msgLower.includes('رواتب') || msgLower.includes('عقد') || msgLower.includes('salary') || msgLower.includes('عرض') || msgLower.includes('مالي')) {
-          replyText = `بناءً على مقاييس السوق الهندسي الحالية لعام 2025/2026 في دول مجلس التعاون الخليجي لمستوى **${targetRole}**:\n\n` +
-            `### 1. معايير الرواتب المعتمدة (Salary Benchmarks):\n` +
-            `- **الرياض (KSA)**: من **24,000 إلى 36,000 ريال سعودي** شهرياً + بدلات السكن والتأمين الطبي.\n` +
-            `- **دبي / أبوظبي (UAE)**: من **26,000 إلى 38,000 درهم إماراتي** شهرياً.\n` +
-            `- **عقود العمل عن بُعد (Remote Global)**: من **5,000$ إلى 8,500$** شهرياً.\n\n` +
-            `### 2. استراتيجية التفاوض (Negotiation Strategy):\n` +
-            `- لا تفصح عن رقمك الأول مباشرة؛ اطلب دائماً معرفة النطاق المخصص للمنصب (Target Budget Band).\n` +
-            `- ركز على العائد الاستثماري (ROI) لخبراتك في ${(cv?.techSkills || ['Architecture']).slice(0, 3).join(', ') || 'التقنيات الحديثة'}.`;
-        } else if (msgLower.includes('مقابلة') || msgLower.includes('interview')) {
-          replyText = `إليك أهم 3 سيناريوهات أسئلة معمارية متوقعة في المقابلات التقنية لـ **${targetRole}**:\n\n` +
-            `1. **System Scalability & Edge Caching:**\n   *كيف تصمم بنية تضمن معالجة 50k طلب متزامن بدون توقف الخوادم؟*\n   - **الإجابة النموذجية**: الاعتماد على Edge SSR، توزيع الحمل عبر Multi-Region CDN، واستخدام Event Streaming لمعالجة العمليات الثقيلة بشكل غير متزامن.\n\n` +
-            `2. **State Decoupling & Memory Leaks:**\n   *ما استراتيجيتك لتفادي تسرب الذاكرة وإعادة المعالجة غير الضرورية؟*\n   - **الإجابة النموذجية**: تطبيق Atomic State Selectors مع Shallow Equality و Idempotency Tokens.\n\n` +
-            `3. **High Availability & Fallbacks:**\n   *كيف تضمن استمرارية المنصة عند انقطاع أحد الـ Third-party APIs الحيوية؟*\n   - **الإجابة النموذجية**: تطبيق نمط Circuit Breaker مع Exponential Backoff و Offline Buffer.`;
-        } else {
-          // Detect common technical comparisons or concepts if present
-          if (msgLower.includes('sql') && msgLower.includes('nosql')) {
-            replyText = `### الفرق بين SQL و NoSQL في بناء التطبيقات الحديثة:\n\n` +
-              `**1. قواعد بيانات SQL (Relational):**\n` +
-              `- **الأنظمة الشائعة:** PostgreSQL, MySQL, SQLite.\n` +
-              `- **طريقة التخزين:** جداول مهيكلة (Tables & Rows) مع Schema صارمة وعلاقات واضحة (Foreign Keys).\n` +
-              `- **نقاط القوة:** دعم كامل لخصائص ACID والمعاملات المالية الدقيقة والنزاهة العالية للبيانات.\n\n` +
-              `**2. قواعد بيانات NoSQL (Non-Relational):**\n` +
-              `- **الأنظمة الشائعة:** MongoDB (Document), Redis (Key-Value), Neo4j (Graph).\n` +
-              `- **طريقة التخزين:** وثائق JSON مرنة بدون Schema مسبقة (Schemaless).\n` +
-              `- **نقاط القوة:** سرعة كتابة فائقة وسهولة التوسع الأفقي (Horizontal Scaling) للبيانات غير المتجانسة.\n\n` +
-              `**المعيار العملي للاختيار:**\n` +
-              `استخدم SQL عندما تكون علاقات البيانات متشابكة وتتطلب دقة معاملات متناهية، واستخدم NoSQL عندما تتطلب منظومتك مرونة في شكل البيانات وأحمال قراءة وكتابة ضخمة جداً.`;
-          } else if ((msgLower.includes('ssr') && msgLower.includes('csr')) || msgLower.includes('server side') || msgLower.includes('client side')) {
-            replyText = `### الفرق بين SSR و CSR وأفضل حالات الاستخدام:\n\n` +
-              `**1. SSR (Server-Side Rendering — مثل Next.js):**\n` +
-              `- يتم توليد الـ HTML الكامل على الخادم لكل طلب وإرساله جاهزاً للمتصفح.\n` +
-              `- **المزايا:** أداء ممتاز في محركات البحث (SEO)، وسرعة تحميل الصفحة الأولية (FCP).\n` +
-              `- **العيوب:** استهلاك أعلى لموارد الخادم وزمن استجابة يعتمد على سرعة السيرفر.\n\n` +
-              `**2. CSR (Client-Side Rendering — مثل Single Page App في React):**\n` +
-              `- المتصفح يحمل هيكل HTML فارغاً مع ملفات JavaScript، ويقوم المتصفح ببناء الواجهة.\n` +
-              `- **المزايا:** تجربة تفاعلية سريعة جداً بعد التحميل الأولي، وتكلفة استضافة خفيفة (Static CDN).\n` +
-              `- **العيوب:** بطء التحميل الأولي في الشبكات البطيئة وضعف أرشفة محركات البحث.\n\n` +
-              `**المعيار العملي:** استخدم SSR للواجهات العامة وصفحات الهبوط والتجارة الإلكترونية، واستخدم CSR للوحات التحكم الداخلية (Dashboards).`;
-          } else if (msgLower.includes('مسار') || msgLower.includes('roadmap') || msgLower.includes('طريق')) {
-            replyText = `### خارطة طريق مقترحة لمسار **${targetRole}**:\n\n` +
-              `1. **الأساسيات واللغات:** إتقان التقنيات الأساسية، معمارية الكود النظيفة، ومفاهيم هياكل البيانات.\n` +
-              `2. **أطر العمل والإنتاجية:** التخصص في الأدوات الأكثر طلباً وبناء خدمات APIs موثوقة.\n` +
-              `3. **النظم والأداء:** تطبيق الـ Containerization و CI/CD وتحسين زمن الاستجابة.\n` +
-              `4. **مشاريع GitHub:** توثيق 2-3 مشاريع كاملة تبرز الأثر التقني والقرارات المعمارية.`;
-          } else if (msgLower.includes('مصدر') || msgLower.includes('مصادر') || msgLower.includes('تعلم') || msgLower.includes('resource')) {
-            replyText = `### أهم مصادر التعلم المعتمدة لـ **${targetRole}**:\n\n` +
-              `1. **المنصات التخصصية:** DeepLearning.AI، Coursera، و CS50.\n` +
-              `2. **المسارات والتوثيق:** roadmap.sh والـ Official Documentation الخاصة بالتقنيات.\n` +
-              `3. **التطبيق المباشر:** مشاريع GitHub المفتوحة وتحديات LeetCode.`;
-          } else if (msgLower.includes('div') || msgLower.includes('عنصر') || msgLower.includes('زر') || msgLower.includes('كود') || msgLower.includes('code') || msgLower.includes('css') || msgLower.includes('html')) {
-            replyText = `أهلاً بك! لتنفيذ هذا التعديل في الكود والواجهة:\n\n` +
-              `1. **إزالة العنصر المطلوب:** احذف وسم الـ \`<div>\` أو العنصر المعني مباشرة من ملف المكون (JSX/TSX)، مع تنظيف أي خصائص (classes) أو دالات مرتبطة به لم تعد مستخدمة.\n` +
-              `2. **تجنب وضع عناصر إضافية:** إذا كان العنصر يلتف حول عناصر أخرى لا تريد تكرارها، استخدم الـ Fragment الفارغ \`<></>\` أو احذف الحاوية تماماً دون إنشاء أي divs جديدة.\n` +
-              `3. **فحص الـ Layout:** تأكد من أن تنسيق الـ Flex أو الـ Grid لا يعتمد على هذا العنصر حتى تظل الواجهة متناسقة.`;
-          } else {
-            replyText = `بخصوص استفسارك حول **"${message}"**:\n\n` +
-              `يسعدني تقديم الإجابة والحل المباشر لك فوراً. إذا كان استفسارك يتعلق بكود معين أو تفاصيل محددة ترغب في تحليلها أو تنفيذها، شاركني بها وسأقوم بمساعدتك فيها خطوة بخطوة وبأفضل الممارسات.`;
-          }
-        }
-      }
+      return res.status(503).json({
+        error: 'AI_UNAVAILABLE',
+        details: 'كل نماذج الذكاء الاصطناعي فشلت في الرد حالياً. راجع الـ server logs (Careem ... failed).',
+      });
     }
-    replyText = (replyText || '').trim();
 
     res.json({
       reply: replyText,
       retrievedChunks: retrieved.map(c => ({ id: c.id, section: c.section })),
-      missingSkills,
+      missingSkills: cvIntent ? missingSkills : [],
       mode: mode || 'career_copilot',
+      model: usedModel,
     });
   } catch (error: any) {
     console.error('RAG Chat Error:', error);
