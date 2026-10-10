@@ -6,7 +6,7 @@ import dotenv from 'dotenv';
 import { GoogleGenAI, Type } from '@google/genai';
 import nodemailer from 'nodemailer';
 import { HfInference } from "@huggingface/inference";
-import { getRotatedCandidateProjects } from './src/data/candidateProjectsPool';
+import { getRotatedCandidateProjects } from './src/data/candidateProjectsPool.js';
 
 dotenv.config();
 
