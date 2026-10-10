@@ -147,8 +147,8 @@ export const AskAIView: React.FC = () => {
     }, 10);
     setIsLoading(true);
 
-    // Prepare full conversation history for model memory
-    const conversationHistory = [...messages, userMsg].slice(-10).map((m) => ({
+    // Prepare prior conversation history for model memory
+    const conversationHistory = messages.slice(-10).map((m) => ({
       role: m.sender === 'user' ? 'user' : 'model',
       text: m.text,
     }));
