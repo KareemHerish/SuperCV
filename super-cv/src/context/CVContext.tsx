@@ -291,7 +291,13 @@ export const CVProvider: React.FC<{ children: React.ReactNode }> = ({ children }
       if (saved) {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed) && parsed.length > 0) {
-          return parsed;
+          const cleaned = parsed.filter(
+            (m) =>
+              m &&
+              typeof m.text === 'string' &&
+              !m.text.includes('أفضل نصيحة للمرحلة الحالية هي التركيز على بناء مشروع عملي')
+          );
+          return cleaned;
         }
       }
     } catch (e) {
