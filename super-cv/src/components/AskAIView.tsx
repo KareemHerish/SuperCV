@@ -191,8 +191,8 @@ export const AskAIView: React.FC = () => {
     }, 10);
     setIsLoading(true);
 
-    // Prepare prior conversation history for model memory
-    const conversationHistory = messages.slice(-10).map((m) => ({
+    // Prepare prior conversation history for short-term session memory (up to 16 messages)
+    const conversationHistory = messages.slice(-16).map((m) => ({
       role: m.sender === 'user' ? 'user' : 'model',
       text: m.text,
     }));
@@ -902,11 +902,20 @@ export const AskAIView: React.FC = () => {
             </div>
           </div>
 
-          {/* Quick Actions (Clear Chat) */}
+          {/* Quick Actions (Clear Chat & Short-term Session Memory Status) */}
           <div className="flex items-center gap-2">
+            {messages.length > 0 && (
+              <div
+                className="hidden sm:flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border border-emerald-500/20 text-[11px] font-bold select-none"
+                title="الشات بوت يحتفظ بسياق جميع الأسئلة والردود السابقة في هذه الجلسة لضمان منطقية وترابط الردود"
+              >
+                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                <span>ذاكرة الجلسة نشطة ({messages.length} رسالة)</span>
+              </div>
+            )}
             <button
               onClick={clearChatMessages}
-              title="مسح المحادثة وبدء جلسة جديدة"
+              title="مسح ذاكرة الجلسة وبدء محادثة جديدة"
               className="w-9 h-9 rounded-xl bg-[var(--bg-surface-low)] hover:bg-red-500/10 text-[var(--color-on-surface-variant)] hover:text-red-500 border border-[var(--color-border)] hover:border-red-500/30 flex items-center justify-center transition-all cursor-pointer shadow-2xs"
             >
               <span className="material-symbols-outlined text-[18px]">delete_outline</span>
