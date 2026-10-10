@@ -72,7 +72,10 @@ export const AskAIView: React.FC = () => {
 
   const stripGreeting = (text: string): string => {
     if (!text) return '';
-    return text.trim();
+    let cleaned = text.trim();
+    // Strip canned boilerplate greetings if any model produces them
+    cleaned = cleaned.replace(/^(?:أهلاً بك[^\n]*\n+|مرحباً[^\n]*\n+|بصفتي[^\n]*\n+)+/i, '').trim();
+    return cleaned || text.trim();
   };
 
   const getClientFallbackReply = (query: string, track: any, candidateCV: any): string => {
@@ -158,15 +161,14 @@ export const AskAIView: React.FC = () => {
     }
 
     if (q.includes('div') || q.includes('عنصر') || q.includes('كود') || q.includes('css')) {
-      return `أهلاً بك! لتنفيذ هذا التعديل في الواجهة والكود:\n\n` +
+      return `لتنفيذ هذا التعديل في الواجهة والكود:\n\n` +
         `1. يمكنك حذف وسم الـ \`<div>\` المطلوب مباشرة من ملف المكون.\n` +
         `2. لتفادي إضافة أي عقد زائدة، استخدم الـ Fragment الفارغ \`<></>\` بدلاً من وضع حاوية جديدة.\n` +
         `3. راجع تنسيقات الـ Flex و Grid لضمان بقاء الواجهة متناسقة بعد الحذف.`;
     }
 
-    return `أهلاً بك! أنا "كريم" — مستشارك البرمجي في Super CV.\n\n` +
-      `بخصوص سؤالك حول "${query}":\n` +
-      `يسعدني مساعدتك فيها خطوة بخطوة. اكتب لي تفاصيل أكثر أو الكود الذي تعمل عليه وسأحلله لك فوراً!`;
+    return `بخصوص استفسارك حول "${query}":\n\n` +
+      `يسعدني تقديم الإجابة والحل المباشر لك فوراً. إذا كان استفسارك يتعلق بكود أو موضوع محدد ترغب في تفصيله، شاركني به وسأساعدك فيه خطوة بخطوة.`;
   };
 
   const handleSendMessage = async (textToSend?: string) => {
