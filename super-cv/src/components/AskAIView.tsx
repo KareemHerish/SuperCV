@@ -72,10 +72,7 @@ export const AskAIView: React.FC = () => {
 
   const stripGreeting = (text: string): string => {
     if (!text) return '';
-    return text
-      .replace(/^[\s\n]*(أهلاً\s*(بيك|بك)?\s*(يا\s*[\w\u0600-\u06FF]+)?|[أا]هلا[ً\s]*(بيك|بك)?\s*(يا\s*[\w\u0600-\u06FF]+)?|مرحباً\s*(بيك|بك)?\s*(يا\s*[\w\u0600-\u06FF]+)?|تحياتي(\s*يا\s*[\w\u0600-\u06FF]+)?|Hello(\s+there)?|Hi(\s+there)?)[!.,،\s\n\-—:]*/iu, '')
-      .replace(/^[\s\n]*(أهلاً|مرحباً|أهلا|تحياتي)[!.,،\s\n\-—:]*/iu, '')
-      .trim();
+    return text.trim();
   };
 
   const getClientFallbackReply = (query: string, track: any, candidateCV: any): string => {
