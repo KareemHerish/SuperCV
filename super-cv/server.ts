@@ -324,7 +324,7 @@ async function generateChatWithGemini(contents: any[], systemInstruction: string
         },
       });
       const timeoutPromise = new Promise<never>((_, reject) => {
-        timer = setTimeout(() => reject(new Error(`Timeout (25s) on ${model}`)), 25000);
+        timer = setTimeout(() => reject(new Error(`Timeout (20s) on ${model}`)), 20000);
       });
       const res: any = await Promise.race([callPromise, timeoutPromise]);
       const text = (res?.text || '').trim();
