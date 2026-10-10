@@ -73,102 +73,9 @@ export const AskAIView: React.FC = () => {
   const stripGreeting = (text: string): string => {
     if (!text) return '';
     let cleaned = text.trim();
-    // Strip canned boilerplate greetings if any model produces them
-    cleaned = cleaned.replace(/^(?:أهلاً بك[^\n]*\n+|مرحباً[^\n]*\n+|بصفتي[^\n]*\n+)+/i, '').trim();
+    // Strip only the canned "بصفتي ..." boilerplate opener (keep natural greetings)
+    cleaned = cleaned.replace(/^(?:بصفتي[^\n]*\n+)+/i, '').trim();
     return cleaned || text.trim();
-  };
-
-  const getClientFallbackReply = (query: string, track: any, candidateCV: any): string => {
-    const q = query.toLowerCase();
-    const trackName = track?.title || 'تطوير البرمجيات';
-    const role = candidateCV?.targetRole || track?.titleEn || 'Software Engineer';
-    const skills: string[] = candidateCV?.techSkills || [];
-
-    if (q.includes('مسار') || q.includes('roadmap') || q.includes('path') || q.includes('طريق')) {
-      if (q.includes('ذكاء') || q.includes('ai') || track?.id === 'ai-engineer') {
-        return `### أفضل مسار مهني لـ مهندس تطبيقات الذكاء الاصطناعي (AI Engineer):\n\n` +
-          `1. **الأساس البرمجي وهندسة النظم:** إتقان Python المتقدم (AsyncIO, Type hints)، وبناء APIs عالية الأداء باستخدام **FastAPI**.\n` +
-          `2. **أطر عمل الذكاء الاصطناعي و الـ LLMs:** إتقان **PyTorch**، بيئة **Hugging Face**، وتقنيات Prompt Engineering المتقدمة.\n` +
-          `3. **هندسة الـ RAG وقواعد البيانات المتجهة:** بناء أنظمة استرجاع متقدمة باستخدام Vector DBs مثل **Pinecone** و **Milvus** مع **LangChain** أو **LlamaIndex**.\n` +
-          `4. **الـ MLOps والإنتاجية:** نشر النماذج باستخدام **Docker**، و **Triton Inference Server**، مع قياس أداء الاستجابة (Latency Optimization).\n\n` +
-          `نصيحة ذهبية: ركز على بناء نظام ذكاء اصطناعي إنتاجي كامل (End-to-End) يحل مشكلة تجارية حقيقية وارفعه على GitHub.`;
-      }
-      return `### خارطة الطريق الاحترافية لمسار **${trackName}** (${role}):\n\n` +
-        `1. **التأسيس الصلب:** إتقان اللغات الأساسية، معمارية الكود النظيفة (Clean Code)، وهياكل البيانات.\n` +
-        `2. **التقنيات الحديثة في بيئات العمل:** التخصص في التقنيات الأكثر طلباً بالسوق مع التركيز على معالجة البيانات وتكامل الخدمات.\n` +
-        `3. **الاعتمادية والأداء:** تطبيق الـ Testing، و CI/CD Pipelines، وإدارة الـ Caching لتقليل زمن الاستجابة.\n` +
-        `4. **المشاريع الإنتاجية:** بناء 2-3 مشاريع كاملة موثقة في GitHub توضح القرارات المعمارية التي اتخذتها.`;
-    }
-
-    if (q.includes('مصدر') || q.includes('مصادر') || q.includes('أتعلم منين') || q.includes('اتعلم منين') || q.includes('resource') || q.includes('كورس')) {
-      return `### أهم مصادر التعلم المعتمدة لتطوير مستواك في **${trackName}**:\n\n` +
-        `1. **الدورات الأكاديمية والتخصصية:**\n` +
-        `   - منصة **DeepLearning.AI** و **Coursera** للتخصصات الحديثة والذكاء الاصطناعي.\n` +
-        `   - كورسات **CS50** و **CS229** من جامعة Stanford لفهم المفاهيم العميقة.\n` +
-        `2. **التوثيق الرسمي والمسارات المفتوحة:**\n` +
-        `   - المسارات التفاعلية في **roadmap.sh** للمتابعة خطوة بخطوة.\n` +
-        `   - الوثائق الرسمية (Official Docs) للتقنيات والـ Libraries المستخدمة.\n` +
-        `3. **الممارسة العملية:**\n` +
-        `   - قراءة الـ Open Source Repositories على **GitHub** والمساهمة فيها.\n` +
-        `   - حل تحديات التفكير المنطقي على **LeetCode** لتجاوز المقابلات التقنية.`;
-    }
-
-    if (q.includes('skill') || q.includes('مهار') || q.includes('أتعلم') || q.includes('اتعلم') || q.includes('اهم') || q.includes('أهم')) {
-      const trackSkills: string[] = [];
-      if (track && Array.isArray(track.categories)) {
-        track.categories.forEach((cat: any) => {
-          if (Array.isArray(cat.skills)) {
-            cat.skills.forEach((s: any) => trackSkills.push(s.name));
-          }
-        });
-      }
-      const missing = trackSkills.filter(
-        ts => !skills.some(s => s.toLowerCase().includes(ts.toLowerCase()) || ts.toLowerCase().includes(s.toLowerCase()))
-      ).slice(0, 4);
-
-      const topPicks = missing.length > 0 ? missing.join('، ') : 'System Design، Docker & CI/CD، Caching (Redis)';
-      return `بناءً على مسارك الحالي في **${trackName}** (${role}):\n\n` +
-        `أهم المهارات اللي تركز عليها حالياً وتضيفها لسيرتك الذاتية:\n` +
-        `1. **${topPicks}**\n` +
-        `2. إتقان **Clean Architecture** وبناء مشاريع كاملة (End-to-End) واضحة في GitHub.\n` +
-        `3. قياس أثر الأداء وحل المشاكل المعمارية وتفادي الـ Bottlenecks بدلاً من مجرد كتابة كود وظيفي.`;
-    }
-
-    if (q.includes('cv') || q.includes('سير') || q.includes('ats') || q.includes('أعدي') || q.includes('اعدي') || q.includes('وظي')) {
-      return `### خطوات تجهيز وتعديل الـ CV لاجتياز أنظمة الـ ATS:\n\n` +
-        `1. **تطبيق معادلة Google XYZ:**\n` +
-        `   - صياغة كل نقطة خبرة بأسلوب: *أنجزت [X] مقاساً بـ [Y] عبر تنفيذ [Z]* (مثال: تقليص زمن الاستجابة بنسبة 35% وتوفير 12k$).\n` +
-        `2. **مطابقة الكلمات المفتاحية (Keywords Matching):**\n` +
-        `   - استخرج المهارات المذكورة في إعلان الوظيفة وضعها بوضوح في قسم المهارات التقنية.\n` +
-        `3. **التصميم المتوافق مع الفرز الآلي:**\n` +
-        `   - استخدم تصميماً نظيفاً أحادي العمود بدون جداول متداخلة أو نصوص داخل صور.\n` +
-        `   - يمكنك استخدام أداة **"ابن الـ CV"** في المنصة وتصدير الـ PDF مباشرة!`;
-    }
-
-    if (q.includes('سؤال') || q.includes('اختبر') || q.includes('كويز') || q.includes('امتحن') || q.includes('quiz')) {
-      const skillFocus = skills[0] || (track?.id === 'backend' ? 'Node.js & PostgreSQL' : 'React & State Architecture');
-      return `إليك سؤال سريع لاختبار مستواك في **${skillFocus}**:\n\n` +
-        `[QUIZ_QUESTION]\n` +
-        `السؤال: في بيئات الإنتاج عالية الحمل (${skillFocus})، ما هو الأسلوب المعماري الأنسب لتفادي عمليات إعادة المعالجة (Re-renders) غير الضرورية وتقليل استهلاك الذاكرة؟\n` +
-        `A) تخزين كافة البيانات في SessionStorage وقراءتها في كل دورة حياة\n` +
-        `B) فصل الحالة واستخدام Atomic Selectors مع Shallow Equality و Idempotent Handlers\n` +
-        `C) تنفيذ forceUpdate الدوري لضمان تحديث كل المكونات بالتزامن\n` +
-        `D) الاعتماد الكامل على متغيرات الـ window العامة لتفادي شجرة المكونات\n` +
-        `[CORRECT: B]\n` +
-        `[EXPLANATION: فصل الحالة والمحددات الذرية مع المقارنة السطحية تمنع المعالجات غير الضرورية وتضمن الحفاظ على معدل إطارات سلس وثبات استهلاك الذاكرة.]\n` +
-        `[/QUIZ_QUESTION]\n\n` +
-        `اضغط على الخيار الصحيح لمعرفة النتيجة فوراً!`;
-    }
-
-    if (q.includes('div') || q.includes('عنصر') || q.includes('كود') || q.includes('css')) {
-      return `لتنفيذ هذا التعديل في الواجهة والكود:\n\n` +
-        `1. يمكنك حذف وسم الـ \`<div>\` المطلوب مباشرة من ملف المكون.\n` +
-        `2. لتفادي إضافة أي عقد زائدة، استخدم الـ Fragment الفارغ \`<></>\` بدلاً من وضع حاوية جديدة.\n` +
-        `3. راجع تنسيقات الـ Flex و Grid لضمان بقاء الواجهة متناسقة بعد الحذف.`;
-    }
-
-    return `بخصوص استفسارك حول "${query}":\n\n` +
-      `يسعدني تقديم الإجابة والحل المباشر لك فوراً. إذا كان استفسارك يتعلق بكود أو موضوع محدد ترغب في تفصيله، شاركني به وسأساعدك فيه خطوة بخطوة.`;
   };
 
   const handleSendMessage = async (textToSend?: string) => {
@@ -239,7 +146,7 @@ export const AskAIView: React.FC = () => {
     }
 
     if (!rawReply) {
-      rawReply = getClientFallbackReply(text.trim(), currentTrack, cv);
+      rawReply = '⚠️ مقدرتش أوصل للمساعد الذكي دلوقتي (مشكلة في الاتصال أو في الخدمة). جرّب تبعت سؤالك تاني بعد لحظات.';
     }
 
     const cleanReply = stripGreeting(rawReply);
