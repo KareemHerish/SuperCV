@@ -135,25 +135,53 @@ function chunkCV(cv: any): CVChunk[] {
   const chunks: CVChunk[] = [];
   if (!cv) return chunks;
 
-  const rawFullText = `
-    Candidate: ${cv.fullName || 'Anonymous'}. Target Role: ${cv.targetRole || 'Software Engineer'}. Track: ${cv.trackId || 'frontend'}. Location: ${cv.location || 'MENA'}.
-    Summary: ${cv.summary || ''}
-    Tech Skills: ${(cv.techSkills || []).join(', ')}
-    Soft Skills: ${(cv.softSkills || []).join(', ')}
-    Experiences: ${(cv.experiences || []).map((e: any) => `${e.role} at ${e.company}: ${(e.achievements || []).join(' ')}`).join('. ')}
-    Projects: ${(cv.projects || []).map((p: any) => `${p.title}: ${p.description} (${p.techStack})`).join('. ')}
-    Education: ${(cv.education || []).map((e: any) => `${e.degree} - ${e.institution}`).join('. ')}
-  `;
+  const hasContent = !!(
+    cv.fullName ||
+    (cv.techSkills && cv.techSkills.length > 0) ||
+    (cv.experiences && cv.experiences.length > 0) ||
+    (cv.projects && cv.projects.length > 0) ||
+    cv.summary
+  );
+  if (!hasContent) return chunks;
 
-  // Notebook chunking implementation
-  const rawChunks = chunkText(rawFullText, 50, 5);
-  rawChunks.forEach((rc, idx) => {
+  const candidateName = cv.fullName || 'المرشح';
+  const role = cv.targetRole || 'مهندس برمجيات';
+
+  if (cv.summary) {
     chunks.push({
-      id: `chunk_${idx}`,
-      section: `Notebook RAG Chunk ${idx + 1} (Mistral Context)`,
-      content: rc,
+      id: 'chunk_summary',
+      section: 'ملخص السيرة الذاتية (Professional Summary)',
+      content: `${candidateName} (${role}): ${cv.summary}`,
     });
-  });
+  }
+
+  if (Array.isArray(cv.techSkills) && cv.techSkills.length > 0) {
+    chunks.push({
+      id: 'chunk_skills',
+      section: 'المهارات التقنية (Technical Skills)',
+      content: `المهارات التقنية لـ ${candidateName}: ${cv.techSkills.join(', ')}`,
+    });
+  }
+
+  if (Array.isArray(cv.experiences) && cv.experiences.length > 0) {
+    cv.experiences.forEach((e: any, idx: number) => {
+      chunks.push({
+        id: `chunk_exp_${idx}`,
+        section: `الخبرة المهنية: ${e.role} في ${e.company || 'شركة تقنية'}`,
+        content: `المسمى: ${e.role} | الشركة: ${e.company} | الفترة: ${e.period || ''} | الإنجازات: ${(e.achievements || []).join(' - ')}`,
+      });
+    });
+  }
+
+  if (Array.isArray(cv.projects) && cv.projects.length > 0) {
+    cv.projects.forEach((p: any, idx: number) => {
+      chunks.push({
+        id: `chunk_proj_${idx}`,
+        section: `المشروع: ${p.title}`,
+        content: `المشروع: ${p.title} | الوصف: ${p.description} | التقنيات: ${p.techStack} | المقاييس: ${p.metrics || ''}`,
+      });
+    });
+  }
 
   return chunks;
 }
@@ -209,28 +237,28 @@ app.post('/api/rag/chat', async (req: Request, res: Response) => {
     const systemInstruction = `
 أنت "كريم" (Careem) — خبير البرمجيات الأول والمهندس المعماري ومستشار المسار المهني (Senior Software Architect & Elite Tech Mentor) في منصة Super CV.
 
-هويتك وشخصيتك:
+هويتك ورسالتك:
 - اسمك: كريم (Careem).
-- أسلوبك: ودود، خبير تقني متمكن، تجيب بدقة 100% وبدون أي إجابات عشوائية أو مضللة.
-- لغتك: العربية الفصيحة/المصرية المهنية السلسة مع المصطلحات التقنية والبرمجية بالإنجليزية الدقيقة (مثل React, TypeScript, PostgreSQL, Docker, CI/CD, Latency, System Design, REST APIs). إذا سأل المستخدم بالإنجليزية، رد بالإنجليزية الاحترافية.
+- أسلوبك: دقيق للغاية، خبير، مباشر، وتجيب بدقة علمية وهندسية 100% دون أي تخمين أو أخطاء.
+- لغتك: العربية المهنية السلسة والمفهومة (مع المصطلحات البرمجية الإنجليزية المعتمدة عالمياً مثل React, TypeScript, Node.js, Docker, CI/CD, Event Loop, System Design). وإذا كتب المستخدم بالإنجليزية رد بإنجليزية احترافية.
 
-سياق المرشح وسيرته الذاتية الحالية:
+سياق المرشح في منصة Super CV:
 - الاسم: ${cv?.fullName || 'المستخدم'}
 - المسمى المستهدف: ${candidateRole}
 - المسار الحالي: ${trackRoadmap?.title || 'هندسة البرمجيات'}
-- المهارات التقنية الحالية: ${(cv?.techSkills || []).join(', ') || 'غير محددة'}
-- المهارات التي تنقصه للمسار: ${missingSkills.join(', ') || 'لا توجد فجوات رئيسية'}
+- المهارات التقنية المسجلة: ${(cv?.techSkills || []).join(', ') || 'لم تُحدد بعد'}
+- المهارات الناقصة المقترحة للمسار: ${missingSkills.join(', ') || 'لا توجد فجوات رئيسية'}
 ${retrievedContextText}
 
-قواعد الإجابة الإلزامية:
-1. الأسئلة البرمجية والتقنية (Coding & Architecture):
-   - أجب عن أي سؤال برمجي أو معماري بإجابة حاسمة، دقيقة، ومبنية على أحدث معايير الصناعة.
-   - وضح السبب والنتيجة (Trade-offs, Performance, Clean Code).
-   - ضع أمثلة كود واضحة ونظيفة داخل كتل كود منسقة (\`\`\`typescript أو \`\`\`javascript إلخ).
+معايير الدقة الإلزامية:
+1. الدقة التقنية والبرمجية (Technical Precision):
+   - كل معلومة هندسية، كود، أو مقارنة بين أدوات يجب أن تكون صحيحة بنسبة 100% ومطابقة لأحدث المعايير في 2025/2026.
+   - إذا سألك المستخدم عن ناتج كود (Output) أو سبب مشكلة (Debugging): تتبع الكود سطر بسطر وقدم النتيجة الدقيقة مع تفسير منطق التنفيذ.
+   - عند كتابة كود: اكتب كوداً نظيفاً، قابلاً للتشغيل، ويراعي الـ Best Practices و الـ Edge Cases.
 
-2. اختبار المهارات والكويز (Quizzes & MCQ):
-   - عندما يطلب المستخدم اختباراً أو كويز أو أسئلة اختيار من متعدد (مثل: "اختبرني", "اسألني سؤال", "كويز", "امتحني في كذا"):
-   - قم بصياغة أسئلة كاملة 100% داخل الوسم التالي بدقة متناهية لكي تعرضها الواجهة كأزرار تفاعلية:
+2. تقييم إجابات الكويز بدقة (Quiz Evaluation):
+   - إذا أجاب المستخدم على سؤال كويز سابق (سواء كتب "A" أو "B" أو "الجواب الثاني" أو نص الخيار): راجع السؤال والخيارات السابقة في سجل المحادثة بدقة، واذكر بوضوح تام هل إجابته صحيحة أم خاطئة، مع شرح دقيق للسبب العلمي، ثم اعرض عليه السؤال التالي.
+   - عندما يطلب كويز أو أسئلة اختبار: صيغ كل سؤال داخل الوسم المخصص لتعرضه المنصة تفاعلياً:
 [QUIZ_QUESTION]
 السؤال: [نص السؤال الكامل والدقيق بدون انقطاع]
 A) [الخيار الأول]
@@ -238,28 +266,25 @@ B) [الخيار الثاني]
 C) [الخيار الثالث]
 D) [الخيار الرابع]
 [CORRECT: A]
-[EXPLANATION: شرح علمي دقيق لسبب صحة هذا الخيار ولماذا باقي الخيارات خاطئة]
+[EXPLANATION: شرح علمي دقيق وصحيح 100% لسبب صحة هذا الخيار ولماذا باقي الخيارات خاطئة]
 [/QUIZ_QUESTION]
-   - إذا أجاب المستخدم على كويز، قيّم إجابته فوراً (صح أو غلط) مع شرح مقنع وقدّم السؤال التالي.
 
 3. السيرة الذاتية وسوق العمل (CV & Career):
-   - ساعده على اجتياز أنظمة الفرز (ATS)، صياغة الإنجازات بمعادلة Google XYZ ("Accomplished [X] measured by [Y] by doing [Z]")، والتحضير لمقابلات العمل.
-   - اربط نصائحك ببيانات سيرته الذاتية الموضحة في السياق أعلاه.
+   - ساعد المستخدم في تحسين سيرته، معايير الـ ATS، صياغة الإنجازات بمعادلة Google XYZ ("Accomplished [X] measured by [Y] by doing [Z]")، وتجاوز المقابلات التقنية.
 
-4. التحية والدردشة العامة (Greetings & Small Talk):
-   - إذا حيّاك المستخدم (ازيك يا كريم، مساء الخير، سلام عليكم، مين انت): رد عليه بلباقة وترحاب ذكي ومباشر كـ "كريم" مستشاره في Super CV، واعرض عليه مساعدته فوراً في مساره أو سيرته أو أسئلته التقنية.
-   - لا تستخدم أي نصوص نمطية مكررة. أجب دائماً على ما يسأل عنه المستخدم تحديداً.
+4. التحية والأسئلة العامة:
+   - رد بلباقة وسرعة وافهم مقصود المستخدم سواء كتب باللهجة المصرية أو الفصحى أو الإنجليزية.
 `;
 
     let replyText = '';
 
-    // Build multi-turn messages array
+    // Build canonical multi-turn messages array
     const contents: any[] = [];
     if (Array.isArray(history)) {
       for (const h of history) {
         if (!h || !h.text || typeof h.text !== 'string' || !h.text.trim()) continue;
         const role = (h.role === 'model' || h.role === 'assistant') ? 'model' : 'user';
-        // In Gemini, contents must start with 'user'
+        // In Gemini, contents array must start with 'user'
         if (contents.length === 0 && role === 'model') continue;
 
         const last = contents[contents.length - 1];
@@ -271,13 +296,15 @@ D) [الخيار الرابع]
       }
     }
 
-    if (contents.length > 0 && contents[contents.length - 1].role === 'user') {
-      contents.push({ role: 'model', parts: [{ text: 'معك بكل تركيز، تفضل.' }] });
-      contents.push({ role: 'user', parts: [{ text: message.trim() }] });
+    // Append the current message
+    const lastItem = contents[contents.length - 1];
+    if (lastItem && lastItem.role === 'user') {
+      lastItem.parts[0].text += '\n\n' + message.trim();
     } else {
       contents.push({ role: 'user', parts: [{ text: message.trim() }] });
     }
 
+    // Ensure contents starts with user
     while (contents.length > 0 && contents[0].role !== 'user') {
       contents.shift();
     }
@@ -285,12 +312,12 @@ D) [الخيار الرابع]
       contents.push({ role: 'user', parts: [{ text: message.trim() }] });
     }
 
-    // Active AI Generation with Model Cascade
+    // Active AI Generation with Model Cascade (temperature 0.2 for strict technical accuracy)
     const geminiRes = await generateWithGeminiCascade({
       contents,
       config: {
         systemInstruction,
-        temperature: 0.65,
+        temperature: 0.2,
         maxOutputTokens: 2500,
       },
       timeoutMs: 14000,
