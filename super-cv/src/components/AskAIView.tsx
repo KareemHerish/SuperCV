@@ -81,6 +81,35 @@ export const AskAIView: React.FC = () => {
     const role = candidateCV?.targetRole || track?.titleEn || 'Software Engineer';
     const skills: string[] = candidateCV?.techSkills || [];
 
+    if (q.includes('مسار') || q.includes('roadmap') || q.includes('path') || q.includes('طريق')) {
+      if (q.includes('ذكاء') || q.includes('ai') || track?.id === 'ai-engineer') {
+        return `### أفضل مسار مهني لـ مهندس تطبيقات الذكاء الاصطناعي (AI Engineer):\n\n` +
+          `1. **الأساس البرمجي وهندسة النظم:** إتقان Python المتقدم (AsyncIO, Type hints)، وبناء APIs عالية الأداء باستخدام **FastAPI**.\n` +
+          `2. **أطر عمل الذكاء الاصطناعي و الـ LLMs:** إتقان **PyTorch**، بيئة **Hugging Face**، وتقنيات Prompt Engineering المتقدمة.\n` +
+          `3. **هندسة الـ RAG وقواعد البيانات المتجهة:** بناء أنظمة استرجاع متقدمة باستخدام Vector DBs مثل **Pinecone** و **Milvus** مع **LangChain** أو **LlamaIndex**.\n` +
+          `4. **الـ MLOps والإنتاجية:** نشر النماذج باستخدام **Docker**، و **Triton Inference Server**، مع قياس أداء الاستجابة (Latency Optimization).\n\n` +
+          `نصيحة ذهبية: ركز على بناء نظام ذكاء اصطناعي إنتاجي كامل (End-to-End) يحل مشكلة تجارية حقيقية وارفعه على GitHub.`;
+      }
+      return `### خارطة الطريق الاحترافية لمسار **${trackName}** (${role}):\n\n` +
+        `1. **التأسيس الصلب:** إتقان اللغات الأساسية، معمارية الكود النظيفة (Clean Code)، وهياكل البيانات.\n` +
+        `2. **التقنيات الحديثة في بيئات العمل:** التخصص في التقنيات الأكثر طلباً بالسوق مع التركيز على معالجة البيانات وتكامل الخدمات.\n` +
+        `3. **الاعتمادية والأداء:** تطبيق الـ Testing، و CI/CD Pipelines، وإدارة الـ Caching لتقليل زمن الاستجابة.\n` +
+        `4. **المشاريع الإنتاجية:** بناء 2-3 مشاريع كاملة موثقة في GitHub توضح القرارات المعمارية التي اتخذتها.`;
+    }
+
+    if (q.includes('مصدر') || q.includes('مصادر') || q.includes('أتعلم منين') || q.includes('اتعلم منين') || q.includes('resource') || q.includes('كورس')) {
+      return `### أهم مصادر التعلم المعتمدة لتطوير مستواك في **${trackName}**:\n\n` +
+        `1. **الدورات الأكاديمية والتخصصية:**\n` +
+        `   - منصة **DeepLearning.AI** و **Coursera** للتخصصات الحديثة والذكاء الاصطناعي.\n` +
+        `   - كورسات **CS50** و **CS229** من جامعة Stanford لفهم المفاهيم العميقة.\n` +
+        `2. **التوثيق الرسمي والمسارات المفتوحة:**\n` +
+        `   - المسارات التفاعلية في **roadmap.sh** للمتابعة خطوة بخطوة.\n` +
+        `   - الوثائق الرسمية (Official Docs) للتقنيات والـ Libraries المستخدمة.\n` +
+        `3. **الممارسة العملية:**\n` +
+        `   - قراءة الـ Open Source Repositories على **GitHub** والمساهمة فيها.\n` +
+        `   - حل تحديات التفكير المنطقي على **LeetCode** لتجاوز المقابلات التقنية.`;
+    }
+
     if (q.includes('skill') || q.includes('مهار') || q.includes('أتعلم') || q.includes('اتعلم') || q.includes('اهم') || q.includes('أهم')) {
       const trackSkills: string[] = [];
       if (track && Array.isArray(track.categories)) {
@@ -102,6 +131,17 @@ export const AskAIView: React.FC = () => {
         `3. قياس أثر الأداء وحل المشاكل المعمارية وتفادي الـ Bottlenecks بدلاً من مجرد كتابة كود وظيفي.`;
     }
 
+    if (q.includes('cv') || q.includes('سير') || q.includes('ats') || q.includes('أعدي') || q.includes('اعدي') || q.includes('وظي')) {
+      return `### خطوات تجهيز وتعديل الـ CV لاجتياز أنظمة الـ ATS:\n\n` +
+        `1. **تطبيق معادلة Google XYZ:**\n` +
+        `   - صياغة كل نقطة خبرة بأسلوب: *أنجزت [X] مقاساً بـ [Y] عبر تنفيذ [Z]* (مثال: تقليص زمن الاستجابة بنسبة 35% وتوفير 12k$).\n` +
+        `2. **مطابقة الكلمات المفتاحية (Keywords Matching):**\n` +
+        `   - استخرج المهارات المذكورة في إعلان الوظيفة وضعها بوضوح في قسم المهارات التقنية.\n` +
+        `3. **التصميم المتوافق مع الفرز الآلي:**\n` +
+        `   - استخدم تصميماً نظيفاً أحادي العمود بدون جداول متداخلة أو نصوص داخل صور.\n` +
+        `   - يمكنك استخدام أداة **"ابن الـ CV"** في المنصة وتصدير الـ PDF مباشرة!`;
+    }
+
     if (q.includes('سؤال') || q.includes('اختبر') || q.includes('كويز') || q.includes('امتحن') || q.includes('quiz')) {
       const skillFocus = skills[0] || (track?.id === 'backend' ? 'Node.js & PostgreSQL' : 'React & State Architecture');
       return `إليك سؤال سريع لاختبار مستواك في **${skillFocus}**:\n\n` +
@@ -117,8 +157,12 @@ export const AskAIView: React.FC = () => {
         `اضغط على الخيار الصحيح لمعرفة النتيجة فوراً!`;
     }
 
-    return `بخصوص استفسارك حول **${trackName}** (${role}):\n\n` +
-      `أفضل نصيحة للمرحلة الحالية هي التركيز على بناء مشروع عملي قوي يبرز معمارية الكود، ربط الـ APIs بكفاءة، وتطبيق اختبارات حقيقية، مع إبراز النتائج بالأرقام في الـ CV (Google XYZ formula).`;
+    return `أهلاً بك! بصفتي مستشارك التقني في **Super CV** لمسار **${trackName}** (${role}):\n\n` +
+      `سؤالك حول "${query}" ممتاز ومهم جداً. لتقديم أفضل توجيه مخصص لك، هل تحب نركز على:\n` +
+      `1. **الجانب المعماري والأكواد العملية** (Best Practices & Clean Code)\n` +
+      `2. **تجهيز سيرتك الذاتية وتطبيقها عملياً** (ATS & Career Impact)\n` +
+      `3. **كويز تقني تفاعلي** لقياس مستواك في هذه النقطة؟\n\n` +
+      `اكتب لي تفاصيل أكثر أو حدد خيارك وسأشرحه لك بالكامل!`;
   };
 
   const handleSendMessage = async (textToSend?: string) => {
@@ -153,73 +197,65 @@ export const AskAIView: React.FC = () => {
       text: m.text,
     }));
 
-    try {
-      const res = await fetch('/api/rag/chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          message: text.trim(),
-          mode: 'careem_copilot',
-          cv,
-          trackRoadmap: currentTrack,
-          history: conversationHistory,
-        }),
-      });
+    let rawReply = '';
+    let retrievedChunks: any = undefined;
+    let missingSkills: any = undefined;
 
-      let rawReply = '';
-      let retrievedChunks: any = undefined;
-      let missingSkills: any = undefined;
+    // Attempt calling server with automatic retry
+    for (let attempt = 1; attempt <= 2; attempt++) {
+      try {
+        const res = await fetch('/api/rag/chat', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            message: text.trim(),
+            mode: 'careem_copilot',
+            cv,
+            trackRoadmap: currentTrack,
+            history: conversationHistory,
+          }),
+        });
 
-      if (res.ok) {
-        const data = await res.json().catch(() => null);
-        if (data && data.reply) {
-          rawReply = data.reply;
-          retrievedChunks = data.retrievedChunks;
-          missingSkills = data.missingSkills;
+        if (res.ok) {
+          const data = await res.json().catch(() => null);
+          if (data && data.reply && typeof data.reply === 'string' && data.reply.trim()) {
+            rawReply = data.reply.trim();
+            retrievedChunks = data.retrievedChunks;
+            missingSkills = data.missingSkills;
+            break;
+          }
+        }
+      } catch (e) {
+        if (attempt === 1) {
+          await new Promise((resolve) => setTimeout(resolve, 800));
         }
       }
-
-      if (!rawReply) {
-        rawReply = getClientFallbackReply(text.trim(), currentTrack, cv);
-      }
-
-      const cleanReply = stripGreeting(rawReply);
-
-      const assistantMsg: ChatMessage = {
-        id: 'msg-' + Date.now() + '-reply',
-        sender: 'assistant',
-        text: cleanReply,
-        time: new Date().toLocaleTimeString('ar-EG', {
-          hour: '2-digit',
-          minute: '2-digit',
-          hour12: true,
-        }),
-        retrievedChunks,
-        missingSkills,
-      };
-
-      setMessages((prev) => [...prev, assistantMsg]);
-    } catch (e) {
-      console.warn('API call failed, utilizing client fallback response:', e);
-      const fallbackReply = stripGreeting(getClientFallbackReply(text.trim(), currentTrack, cv));
-      const fallbackMsg: ChatMessage = {
-        id: 'msg-' + Date.now() + '-reply',
-        sender: 'assistant',
-        text: fallbackReply,
-        time: new Date().toLocaleTimeString('ar-EG', {
-          hour: '2-digit',
-          minute: '2-digit',
-          hour12: true,
-        }),
-      };
-      setMessages((prev) => [...prev, fallbackMsg]);
-    } finally {
-      setIsLoading(false);
-      // Ensure cursor stays in the input area after message completes
-      setTimeout(() => {
-        inputRef.current?.focus();
-      }, 50);
     }
+
+    if (!rawReply) {
+      rawReply = getClientFallbackReply(text.trim(), currentTrack, cv);
+    }
+
+    const cleanReply = stripGreeting(rawReply);
+
+    const assistantMsg: ChatMessage = {
+      id: 'msg-' + Date.now() + '-reply',
+      sender: 'assistant',
+      text: cleanReply,
+      time: new Date().toLocaleTimeString('ar-EG', {
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: true,
+      }),
+      retrievedChunks,
+      missingSkills,
+    };
+
+    setMessages((prev) => [...prev, assistantMsg]);
+    setIsLoading(false);
+    setTimeout(() => {
+      inputRef.current?.focus();
+    }, 50);
   };
 
   const handleCopyText = (msgId: string, text: string) => {
