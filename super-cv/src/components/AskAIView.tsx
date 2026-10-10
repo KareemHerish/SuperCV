@@ -157,12 +157,16 @@ export const AskAIView: React.FC = () => {
         `اضغط على الخيار الصحيح لمعرفة النتيجة فوراً!`;
     }
 
-    return `أهلاً بك! بصفتي مستشارك التقني في **Super CV** لمسار **${trackName}** (${role}):\n\n` +
-      `سؤالك حول "${query}" ممتاز ومهم جداً. لتقديم أفضل توجيه مخصص لك، هل تحب نركز على:\n` +
-      `1. **الجانب المعماري والأكواد العملية** (Best Practices & Clean Code)\n` +
-      `2. **تجهيز سيرتك الذاتية وتطبيقها عملياً** (ATS & Career Impact)\n` +
-      `3. **كويز تقني تفاعلي** لقياس مستواك في هذه النقطة؟\n\n` +
-      `اكتب لي تفاصيل أكثر أو حدد خيارك وسأشرحه لك بالكامل!`;
+    if (q.includes('div') || q.includes('عنصر') || q.includes('كود') || q.includes('css')) {
+      return `أهلاً بك! لتنفيذ هذا التعديل في الواجهة والكود:\n\n` +
+        `1. يمكنك حذف وسم الـ \`<div>\` المطلوب مباشرة من ملف المكون.\n` +
+        `2. لتفادي إضافة أي عقد زائدة، استخدم الـ Fragment الفارغ \`<></>\` بدلاً من وضع حاوية جديدة.\n` +
+        `3. راجع تنسيقات الـ Flex و Grid لضمان بقاء الواجهة متناسقة بعد الحذف.`;
+    }
+
+    return `أهلاً بك! أنا "كريم" — مستشارك البرمجي في Super CV.\n\n` +
+      `بخصوص سؤالك حول "${query}":\n` +
+      `يسعدني مساعدتك فيها خطوة بخطوة. اكتب لي تفاصيل أكثر أو الكود الذي تعمل عليه وسأحلله لك فوراً!`;
   };
 
   const handleSendMessage = async (textToSend?: string) => {
@@ -902,20 +906,11 @@ export const AskAIView: React.FC = () => {
             </div>
           </div>
 
-          {/* Quick Actions (Clear Chat & Short-term Session Memory Status) */}
+          {/* Quick Actions */}
           <div className="flex items-center gap-2">
-            {messages.length > 0 && (
-              <div
-                className="hidden sm:flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border border-emerald-500/20 text-[11px] font-bold select-none"
-                title="الشات بوت يحتفظ بسياق جميع الأسئلة والردود السابقة في هذه الجلسة لضمان منطقية وترابط الردود"
-              >
-                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-                <span>ذاكرة الجلسة نشطة ({messages.length} رسالة)</span>
-              </div>
-            )}
             <button
               onClick={clearChatMessages}
-              title="مسح ذاكرة الجلسة وبدء محادثة جديدة"
+              title="مسح المحادثة وبدء محادثة جديدة"
               className="w-9 h-9 rounded-xl bg-[var(--bg-surface-low)] hover:bg-red-500/10 text-[var(--color-on-surface-variant)] hover:text-red-500 border border-[var(--color-border)] hover:border-red-500/30 flex items-center justify-center transition-all cursor-pointer shadow-2xs"
             >
               <span className="material-symbols-outlined text-[18px]">delete_outline</span>
