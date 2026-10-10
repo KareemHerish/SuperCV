@@ -42,7 +42,7 @@ function getAIClient() {
   });
 }
 
-const ai = getAIClient();
+// NOTE: client is created lazily inside each request (a missing key must not crash the whole function at import time)
 
 const GEMINI_MODELS_CASCADE = [
   'gemini-3.1-flash-lite',
@@ -308,11 +308,10 @@ function buildChatContents(history: any, message: string) {
 }
 
 async function generateChatWithGemini(contents: any[], systemInstruction: string): Promise<{ text: string; model: string } | null> {
-  const activeAI = getAIClient();
-
   for (const model of CHAT_MODELS) {
     let timer: NodeJS.Timeout | undefined;
     try {
+      const activeAI = getAIClient();
       const callPromise = activeAI.models.generateContent({
         model,
         contents,
@@ -416,6 +415,8 @@ app.post('/api/rag/chat', async (req: Request, res: Response) => {
     if (!replyText) {
       return res.status(503).json({
         error: 'AI_UNAVAILABLE',
+        hasGeminiKey: !!(process.env.GEMINI_API_KEY && process.env.GEMINI_API_KEY.trim()),
+        hasHuggingFaceKey: !!process.env.HUGGINGFACE_API_KEY,
         details: 'كل نماذج الذكاء الاصطناعي فشلت في الرد حالياً. راجع الـ server logs (Careem ... failed).',
       });
     }
