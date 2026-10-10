@@ -24,18 +24,30 @@ app.use(express.urlencoded({ extended: true, limit: '25mb' }));
 function getAIClient() {
   const key = process.env.GEMINI_API_KEY;
   if (key && key.trim()) {
-    return new GoogleGenAI({ apiKey: key.trim() });
+    return new GoogleGenAI({
+      apiKey: key.trim(),
+      httpOptions: {
+        headers: {
+          'User-Agent': 'aistudio-build',
+        },
+      },
+    });
   }
-  return new GoogleGenAI();
+  return new GoogleGenAI({
+    httpOptions: {
+      headers: {
+        'User-Agent': 'aistudio-build',
+      },
+    },
+  });
 }
 
 const ai = getAIClient();
 
 const GEMINI_MODELS_CASCADE = [
-  'models/gemini-3.8-flash',
-  'gemini-3.8-flash',
-  'models/gemini-3.8-flash-lite',
+  'gemini-3.1-flash-lite',
   'gemini-flash-latest',
+  'gemini-3.8-flash',
 ];
 
 async function generateWithGeminiCascade(params: {
@@ -44,7 +56,7 @@ async function generateWithGeminiCascade(params: {
   timeoutMs?: number;
 }) {
   const activeAI = getAIClient();
-  const timeoutMs = params.timeoutMs || 8000;
+  const timeoutMs = params.timeoutMs || 10000;
 
   for (const model of GEMINI_MODELS_CASCADE) {
     try {
@@ -60,7 +72,8 @@ async function generateWithGeminiCascade(params: {
       if (res && res.text) {
         return res;
       }
-    } catch {
+    } catch (err: any) {
+      console.warn(`[Gemini Cascade] ${model} warning:`, err?.message?.slice(0, 100) || err);
       // Quietly try next model in cascade
     }
   }
@@ -189,72 +202,98 @@ app.post('/api/rag/chat', async (req: Request, res: Response) => {
     const candidateRole = cv?.targetRole || cv?.title || trackRoadmap?.titleEn || 'Software Engineer';
     const candidateSkills = (cv?.techSkills || []).slice(0, 8);
 
+    const retrievedContextText = retrieved && retrieved.length > 0
+      ? `\n\n=== RELEVANT CANDIDATE CV EXTRACTS (RAG CHUNKS) ===\n` + retrieved.map((r, i) => `[Chunk ${i + 1} - ${r.section}]: ${r.content}`).join('\n')
+      : '';
+
     const systemInstruction = `
-You are "Careem" (كريم) — an elite AI Senior Software Architect and Tech Mentor.
-Your mission is to provide clear, high-signal, concise, and direct answers to ANY question the user asks.
+أنت "كريم" (Careem) — خبير البرمجيات الأول والمهندس المعماري ومستشار المسار المهني (Senior Software Architect & Elite Tech Mentor) في منصة Super CV.
 
-ABSOLUTE REQUIREMENTS:
-1. ZERO GREETINGS:
-   - NEVER start with greetings (ممنوع منعاً باتاً: "أهلاً يا كريم", "أهلاً بك", "مرحباً", "تحياتي", "Hi", "Hello").
-   - Start immediately with the direct answer on line 1.
+هويتك وشخصيتك:
+- اسمك: كريم (Careem).
+- أسلوبك: ودود، خبير تقني متمكن، تجيب بدقة 100% وبدون أي إجابات عشوائية أو مضللة.
+- لغتك: العربية الفصيحة/المصرية المهنية السلسة مع المصطلحات التقنية والبرمجية بالإنجليزية الدقيقة (مثل React, TypeScript, PostgreSQL, Docker, CI/CD, Latency, System Design, REST APIs). إذا سأل المستخدم بالإنجليزية، رد بالإنجليزية الاحترافية.
 
-2. CONVERSATIONAL MEMORY (ذاكرة المحادثة):
-   - You have complete access to the previous messages in this chat session.
-   - When the user refers to something previously discussed (e.g. "إيه رأيك في ده؟", "طب السؤال اللي فات", "ليه اخترت كذا؟", "اشرحلي النقطة التانية", "كمل"), REMEMBER the context and answer in continuity.
+سياق المرشح وسيرته الذاتية الحالية:
+- الاسم: ${cv?.fullName || 'المستخدم'}
+- المسمى المستهدف: ${candidateRole}
+- المسار الحالي: ${trackRoadmap?.title || 'هندسة البرمجيات'}
+- المهارات التقنية الحالية: ${(cv?.techSkills || []).join(', ') || 'غير محددة'}
+- المهارات التي تنقصه للمسار: ${missingSkills.join(', ') || 'لا توجد فجوات رئيسية'}
+${retrievedContextText}
 
-3. MULTIPLE-CHOICE QUESTIONS & QUIZZES (أسئلة واختبارات اختيارية تفاعلية):
-   - When the user asks for questions, quizzes, or testing their skills (مثال: "اختبرني", "اسألني سؤال", "اديني أسئلة كويز", "امتحني في كذا", "أسئلة اختيار من متعدد", "اختبر مستواي"):
-   - IMPORTANT: The questions MUST BE 100% COMPLETE. NEVER truncate, cut off, or leave a question or sentence unfinished.
-   - Format EACH multiple-choice question inside the structured tag below so the platform renders interactive clickable option buttons for the user to pick an answer and immediately see if it's correct or wrong:
+قواعد الإجابة الإلزامية:
+1. الأسئلة البرمجية والتقنية (Coding & Architecture):
+   - أجب عن أي سؤال برمجي أو معماري بإجابة حاسمة، دقيقة، ومبنية على أحدث معايير الصناعة.
+   - وضح السبب والنتيجة (Trade-offs, Performance, Clean Code).
+   - ضع أمثلة كود واضحة ونظيفة داخل كتل كود منسقة (\`\`\`typescript أو \`\`\`javascript إلخ).
+
+2. اختبار المهارات والكويز (Quizzes & MCQ):
+   - عندما يطلب المستخدم اختباراً أو كويز أو أسئلة اختيار من متعدد (مثل: "اختبرني", "اسألني سؤال", "كويز", "امتحني في كذا"):
+   - قم بصياغة أسئلة كاملة 100% داخل الوسم التالي بدقة متناهية لكي تعرضها الواجهة كأزرار تفاعلية:
 [QUIZ_QUESTION]
-السؤال: [نص السؤال الكامل هنا بدون أي انقطاع]
+السؤال: [نص السؤال الكامل والدقيق بدون انقطاع]
 A) [الخيار الأول]
 B) [الخيار الثاني]
 C) [الخيار الثالث]
 D) [الخيار الرابع]
 [CORRECT: A]
-[EXPLANATION: شرح موجز ودقيق لسبب صحة هذا الخيار ولماذا باقي الخيارات خاطئة]
+[EXPLANATION: شرح علمي دقيق لسبب صحة هذا الخيار ولماذا باقي الخيارات خاطئة]
 [/QUIZ_QUESTION]
-   - You can give 1, 2, or 3 questions based on the user's request.
-   - If the user answers in the chat (e.g. "الجواب A" or "(ب)"), evaluate their answer immediately: state clearly whether it is correct or incorrect (صح أو غلط), explain why concisely, and offer the next challenge.
+   - إذا أجاب المستخدم على كويز، قيّم إجابته فوراً (صح أو غلط) مع شرح مقنع وقدّم السؤال التالي.
 
-4. NON-QUIZ & REGULAR QUESTIONS (رد واضح ومختصر):
-   - When the user asks about anything else (career advice, technologies, roadmap, CV analysis, architecture, code, comparisons):
-   - Keep your answer CLEAR, CONCISE, AND HIGH-SIGNAL (رد واضح ومختصر ومباشر بدون حشو أو إطالة غير مفيدة).
-   - Answer the core question directly in 2 to 4 focused bullet points or a concise code example.
-   - Always finish all thoughts and sentences completely.
+3. السيرة الذاتية وسوق العمل (CV & Career):
+   - ساعده على اجتياز أنظمة الفرز (ATS)، صياغة الإنجازات بمعادلة Google XYZ ("Accomplished [X] measured by [Y] by doing [Z]")، والتحضير لمقابلات العمل.
+   - اربط نصائحك ببيانات سيرته الذاتية الموضحة في السياق أعلاه.
 
-5. LANGUAGE:
-   - Match the user's language: Professional Arabic with English technical terms when speaking Arabic; crisp English when speaking English.
+4. التحية والدردشة العامة (Greetings & Small Talk):
+   - إذا حيّاك المستخدم (ازيك يا كريم، مساء الخير، سلام عليكم، مين انت): رد عليه بلباقة وترحاب ذكي ومباشر كـ "كريم" مستشاره في Super CV، واعرض عليه مساعدته فوراً في مساره أو سيرته أو أسئلته التقنية.
+   - لا تستخدم أي نصوص نمطية مكررة. أجب دائماً على ما يسأل عنه المستخدم تحديداً.
 `;
 
     let replyText = '';
 
-    // Build memory context from previous chat messages
-    let historyContext = '';
-    if (Array.isArray(history) && history.length > 0) {
-      const validHistory = history
-        .filter((h: any) => h && typeof h.text === 'string' && h.text.trim())
-        .slice(-10);
-      if (validHistory.length > 0) {
-        historyContext = '\n\n=== سجل المحادثة السابقة (CONVERSATION HISTORY) ===\n' +
-          validHistory
-            .map((h: any) => `${(h.role === 'model' || h.role === 'assistant') ? 'Careem' : 'المستخدم'}: ${h.text.trim()}`)
-            .join('\n\n') + '\n';
+    // Build multi-turn messages array
+    const contents: any[] = [];
+    if (Array.isArray(history)) {
+      for (const h of history) {
+        if (!h || !h.text || typeof h.text !== 'string' || !h.text.trim()) continue;
+        const role = (h.role === 'model' || h.role === 'assistant') ? 'model' : 'user';
+        // In Gemini, contents must start with 'user'
+        if (contents.length === 0 && role === 'model') continue;
+
+        const last = contents[contents.length - 1];
+        if (last && last.role === role) {
+          last.parts[0].text += '\n\n' + h.text.trim();
+        } else {
+          contents.push({ role, parts: [{ text: h.text.trim() }] });
+        }
       }
     }
 
-    const fullPrompt = `=== CANDIDATE CONTEXT ===\nRole: ${candidateRole}\nSkills: ${candidateSkills.join(', ')}${historyContext}\n\n=== USER QUESTION (ANSWER DIRECTLY ON LINE 1 WITHOUT GREETINGS) ===\n${message}`;
+    if (contents.length > 0 && contents[contents.length - 1].role === 'user') {
+      contents.push({ role: 'model', parts: [{ text: 'معك بكل تركيز، تفضل.' }] });
+      contents.push({ role: 'user', parts: [{ text: message.trim() }] });
+    } else {
+      contents.push({ role: 'user', parts: [{ text: message.trim() }] });
+    }
 
-    // Active AI Generation with Model Cascade (generous token limit & timeout so questions never cut off)
+    while (contents.length > 0 && contents[0].role !== 'user') {
+      contents.shift();
+    }
+    if (contents.length === 0) {
+      contents.push({ role: 'user', parts: [{ text: message.trim() }] });
+    }
+
+    // Active AI Generation with Model Cascade
     const geminiRes = await generateWithGeminiCascade({
-      contents: fullPrompt,
+      contents,
       config: {
         systemInstruction,
-        temperature: 0.7,
+        temperature: 0.65,
         maxOutputTokens: 2500,
       },
-      timeoutMs: 16000,
+      timeoutMs: 14000,
     });
 
     if (geminiRes && geminiRes.text && geminiRes.text.trim()) {
@@ -417,11 +456,7 @@ D) [الخيار الرابع]
         }
       }
     }
-    // Ensure no greeting slipped through at the beginning of the reply
-    replyText = replyText
-      .replace(/^[\s\n]*(أهلاً\s*(بيك|بك)?\s*(يا\s*[\w\u0600-\u06FF]+)?|[أا]هلا[ً\s]*(بيك|بك)?\s*(يا\s*[\w\u0600-\u06FF]+)?|مرحباً\s*(بيك|بك)?\s*(يا\s*[\w\u0600-\u06FF]+)?|تحياتي(\s*يا\s*[\w\u0600-\u06FF]+)?|Hello(\s+there)?|Hi(\s+there)?)[!.,،\s\n\-—:]*/iu, '')
-      .replace(/^[\s\n]*(أهلاً|مرحباً|أهلا|تحياتي)[!.,،\s\n\-—:]*/iu, '')
-      .trim();
+    replyText = (replyText || '').trim();
 
     res.json({
       reply: replyText,
