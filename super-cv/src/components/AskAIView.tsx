@@ -137,8 +137,12 @@ export const AskAIView: React.FC = () => {
             missingSkills = data.missingSkills;
             break;
           }
+        } else {
+          const errBody = await res.json().catch(() => null);
+          console.error('[Careem] /api/rag/chat failed:', res.status, errBody);
         }
       } catch (e) {
+        console.error('[Careem] network error:', e);
         if (attempt === 1) {
           await new Promise((resolve) => setTimeout(resolve, 800));
         }
